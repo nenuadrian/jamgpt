@@ -150,8 +150,8 @@ def main():
     else:
         cfg_build = run_cfg_from_args(args, vocab_size)
 
-    # ---- init model/opt/sched/amp ----
     model = GPTModern(**cfg_build).to(device)
+    print(model)
     optim = torch.optim.AdamW(
         model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.1
     )

@@ -14,9 +14,36 @@ pip install -r requirements.txt
 
 ## pipeline
 
-```bash
-cd src
+```
+GPTModern(
+  (tok_emb): Embedding(8000, 128)
+  (drop): Dropout(p=0.0, inplace=False)
+  (blocks): ModuleList(
+    (0-1): 2 x TransformerBlockModern(
+      (ln1): RMSNorm()
+      (attn): CausalSelfAttentionModern(
+        (wq): Linear(in_features=128, out_features=128, bias=False)
+        (wk): Linear(in_features=128, out_features=128, bias=False)
+        (wv): Linear(in_features=128, out_features=128, bias=False)
+        (proj): Linear(in_features=128, out_features=128, bias=False)
+        (dropout): Dropout(p=0.0, inplace=False)
+      )
+      (ln2): RMSNorm()
+      (ffn): SwiGLU(
+        (w1): Linear(in_features=128, out_features=512, bias=False)
+        (w2): Linear(in_features=128, out_features=512, bias=False)
+        (w3): Linear(in_features=512, out_features=128, bias=False)
+        (act): SiLU()
+        (drop): Dropout(p=0.0, inplace=False)
+      )
+    )
+  )
+  (ln_f): Identity()
+  (head): Linear(in_features=128, out_features=8000, bias=False)
+)
+```
 
+```bash
 python train_base.py --data data/harrypotter.txt --out runs/base --bpe --vocab_size 8000 --epochs 1 --steps 300 --batch_size 16 --block_size 128 --n_layer 2 --n_head 2 --n_embd 128 --mixed_precision --grad_accum_steps 2 --log tensorboard
 
 python train_sft.py --data huggingface --ckpt runs/base/model_last.pt --out runs/sft --steps 300 --batch_size 8 --block_size 256 --n_layer 2 --n_head 2 --n_embd 128
