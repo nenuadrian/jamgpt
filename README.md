@@ -1,4 +1,4 @@
-# GPT From Scratch - From Pre to Post
+# JamGPT - LLM From Scratch - From Pre to Post
 
 Repository based on the work of Vivek Kalyanarangan in [llm_from_scratch](https://github.com/vivekkalyanarangan30/llm_from_scratch).
 
