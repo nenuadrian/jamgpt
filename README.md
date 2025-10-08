@@ -12,6 +12,22 @@ conda activate llm_from_scratch
 pip install -r requirements.txt
 ```
 
+## pipeline
+
+```bash
+cd src
+
+python train_bpe_tokenizer.py --data data/tiny.txt --out runs/tokenizer --bpe --vocab_size 8000 --epochs 1 --steps 300 --batch_size 16 --block_size 128 --n_layer 2 --n_head 2 --n_embd 128 --mixed_precision --grad_accum_steps 2 --log tensorboard
+
+python train_rm.py --bpe_dir runs/tokenizer/tokenizer
+
+python train_sft.py
+
+python train_ppo.py --policy_ckpt runs/sft/model_last.pt --reward_ckpt runs/rm-demo/model_last.pt --steps 100 --batch_size 4 --resp_len 128 --bpe_dir runs/tokenizer/tokenizer
+
+python train_grpo.py --group_size 4 --policy_ckpt runs/sft/model_last.pt --reward_ckpt runs/rm-demo/model_last.pt --steps 200 --batch_prompts 4 --resp_len 128 --bpe_dir runs/tokenizer/tokenizer
+```
+
 ## guide
 
 ## Part 0 — Foundations & Mindset
