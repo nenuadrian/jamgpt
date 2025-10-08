@@ -1,12 +1,8 @@
 from __future__ import annotations
 import argparse, time, signal
 from pathlib import Path
-import sys
 
 import torch
-
-# so we can import Part 3 model
-from pathlib import Path as _P
 
 from model_modern import GPTModern
 
@@ -47,8 +43,8 @@ def run_cfg_from_args(args, vocab_size: int) -> dict:
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--data", type=str, required=True)
-    p.add_argument("--out", type=str, default="runs/part4")
+    p.add_argument("--data", type=str, default="data/harrypotter.txt")
+    p.add_argument("--out", type=str, default="runs/base")
 
     # tokenizer / model dims
     p.add_argument(
