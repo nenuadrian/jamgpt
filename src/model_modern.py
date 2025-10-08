@@ -2,6 +2,8 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 from block_modern import TransformerBlockModern
+from utils import top_k_top_p_filtering
+import torch.nn.functional as F
 
 
 class GPTModern(nn.Module):
@@ -70,8 +72,6 @@ class GPTModern(nn.Module):
 
         loss = None
         if targets is not None:
-            import torch.nn.functional as F
-
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
         return logits, loss, new_caches
 
@@ -86,11 +86,6 @@ class GPTModern(nn.Module):
         eos_id=1,  # addition from part 6 for early stopping
         sliding_window: int | None = None,
     ):
-        try:
-            from utils import top_k_top_p_filtering as _tk
-        except Exception:
-            _tk = lambda x, **_: x
-
         self.eval()
         idx = prompt
         kvs = [None] * len(self.blocks)
@@ -105,7 +100,7 @@ class GPTModern(nn.Module):
             logits, _, kvs = self(idx_cond, kv_cache_list=kvs, start_pos=start_pos)
 
             next_logits = logits[:, -1, :] / max(temperature, 1e-6)
-            next_logits = _tk(next_logits, top_k=top_k, top_p=top_p)
+            next_logits = top_k_top_p_filtering(next_logits, top_k=top_k, top_p=top_p)
             probs = torch.softmax(next_logits, dim=-1)
             next_id = (
                 torch.argmax(probs, dim=-1, keepdim=True)
@@ -131,11 +126,6 @@ class GPTModern(nn.Module):
         top_p=None,
         sliding_window: int | None = None,
     ):
-        try:
-            from utils import top_k_top_p_filtering as _tk
-        except Exception:
-            _tk = lambda x, **_: x
-
         self.eval()
         idx = prompt
 
@@ -148,7 +138,7 @@ class GPTModern(nn.Module):
             logits, _, _ = self(idx_cond, kv_cache_list=None, start_pos=start_pos)
 
             next_logits = logits[:, -1, :] / max(temperature, 1e-6)
-            next_logits = _tk(next_logits, top_k=top_k, top_p=top_p)
+            next_logits = top_k_top_p_filtering(next_logits, top_k=top_k, top_p=top_p)
             probs = torch.softmax(next_logits, dim=-1)
             topv, topi = torch.topk(probs, 10)
             print("top ids:", topi.tolist())

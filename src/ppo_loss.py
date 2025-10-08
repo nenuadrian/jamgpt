@@ -2,6 +2,7 @@ from __future__ import annotations
 import torch, torch.nn.functional as F
 from dataclasses import dataclass
 
+
 @dataclass
 class PPOLossOut:
     policy_loss: torch.Tensor
@@ -11,8 +12,17 @@ class PPOLossOut:
     total_loss: torch.Tensor
 
 
-def ppo_losses(new_logp, old_logp, adv, new_values, old_values, returns,
-               clip_ratio=0.2, vf_coef=0.5, ent_coef=0.0):
+def ppo_losses(
+    new_logp,
+    old_logp,
+    adv,
+    new_values,
+    old_values,
+    returns,
+    clip_ratio=0.2,
+    vf_coef=0.5,
+    ent_coef=0.0,
+):
     # policy
     ratio = torch.exp(new_logp - old_logp)  # (N,)
     unclipped = ratio * adv

@@ -5,6 +5,7 @@ from policy import PolicyWithValue
 from rollout import RLHFTokenizer, sample_prompts, format_prompt_only
 
 from model_reward import RewardModel
+from formatters import Example, format_example
 
 
 def score_policy(policy_ckpt: str, rm_ckpt: str, bpe_dir: str | None, n: int = 16):
@@ -63,7 +64,6 @@ def score_policy(policy_ckpt: str, rm_ckpt: str, bpe_dir: str | None, n: int = 1
         resp_old = tok.decode(y_old[0].tolist()[len(ids[-tok.block_size :]) :])
 
         # compute RM reward on formatted full text
-        from part_6.formatters import Example, format_example
 
         text = format_example(Example(p, resp))
         z = torch.tensor(

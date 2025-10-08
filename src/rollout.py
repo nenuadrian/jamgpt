@@ -61,11 +61,7 @@ def approx_kl(policy_logp: torch.Tensor, ref_logp: torch.Tensor) -> torch.Tensor
     return (policy_logp - ref_logp).mean()
 
 
-# ---------- small prompt source ----------
-try:
-    from datasets import load_dataset as _load_ds
-except Exception:
-    _load_ds = None
+from datasets import load_dataset as _load_ds
 
 
 def sample_prompts(n: int) -> List[str]:
