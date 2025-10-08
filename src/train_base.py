@@ -8,7 +8,6 @@ import torch
 # so we can import Part 3 model
 from pathlib import Path as _P
 
-sys.path.append(str(_P(__file__).resolve().parents[1] / "part_3"))
 from model_modern import GPTModern
 
 from tokenizer_bpe import BPETokenizer
