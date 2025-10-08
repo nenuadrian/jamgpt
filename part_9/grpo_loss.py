@@ -1,7 +1,7 @@
-# grpo_loss.py
 from __future__ import annotations
 import torch
 from dataclasses import dataclass
+
 
 @dataclass
 class PolicyOnlyLossOut:
@@ -12,8 +12,15 @@ class PolicyOnlyLossOut:
     total_loss: torch.Tensor
 
 
-def ppo_policy_only_losses(new_logp, old_logp, adv, clip_ratio=0.2, ent_coef=0.0,
-                           kl_coef: float = 0.0, kl_mean: torch.Tensor | None = None):
+def ppo_policy_only_losses(
+    new_logp,
+    old_logp,
+    adv,
+    clip_ratio=0.2,
+    ent_coef=0.0,
+    kl_coef: float = 0.0,
+    kl_mean: torch.Tensor | None = None,
+):
     """
     PPO-style clipped policy loss, *policy only* (no value head),
     plus a separate KL(π||π_ref) penalty term:  total = L_PPO + kl_coef * KL.
@@ -35,5 +42,7 @@ def ppo_policy_only_losses(new_logp, old_logp, adv, clip_ratio=0.2, ent_coef=0.0
 
     kl_ref = kl_mean if kl_mean is not None else new_logp.new_tensor(0.0)
 
-    total = policy_loss - ent_coef * entropy + kl_coef * kl_ref # entropy bonus was not used in original GRPO paper
+    total = (
+        policy_loss - ent_coef * entropy + kl_coef * kl_ref
+    )  # entropy bonus was not used in original GRPO paper
     return PolicyOnlyLossOut(policy_loss, entropy, approx_kl, kl_ref, total)
