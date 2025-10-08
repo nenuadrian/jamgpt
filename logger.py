@@ -1,6 +1,7 @@
 from __future__ import annotations
 import time
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 
 class NoopLogger:
@@ -18,10 +19,8 @@ class TBLogger(NoopLogger):
     Extras you can optionally use:
       - logger.hist("params/wte.weight", tensor, step)
       - logger.text("samples/generation", text, step)
-      - logger.image("attn/heatmap", HWC_or_CHW_tensor_or_np, step)
       - logger.graph(model, example_batch)
       - logger.hparams(dict_of_config, dict_of_metrics_once)
-      - logger.flush()
     Auto-behavior:
       - If a value in .log(...) is a tensor/ndarray with >1 element, it logs a histogram.
       - If key starts with "text/", logs as text.
@@ -125,26 +124,6 @@ class TBLogger(NoopLogger):
         except Exception:
             pass
 
-    def image(self, tag: str, img, step: Optional[int] = None):
-        """
-        img: torch.Tensor [C,H,W] or [H,W,C] or numpy array
-        """
-        if not self.w:
-            return
-        try:
-            self.w.add_image(
-                tag,
-                img,
-                global_step=step,
-                dataformats=(
-                    "CHW"
-                    if getattr(img, "ndim", 0) == 3 and img.shape[0] in (1, 3)
-                    else "HWC"
-                ),
-            )
-        except Exception:
-            pass
-
     def graph(self, model, example_input):
         if not self.w:
             return
@@ -167,13 +146,6 @@ class TBLogger(NoopLogger):
             self.hparams_logged = True
         except Exception:
             pass
-
-    def flush(self):
-        if self.w:
-            try:
-                self.w.flush()
-            except Exception:
-                pass
 
     def close(self):
         if self.w:
@@ -198,7 +170,7 @@ class WBLogger(NoopLogger):
             self.wb.log(kv)
 
 
-def init_logger(which: str, out_dir: str = "runs/part4"):
+def init_logger(which: str, out_dir: str):
     if which == "tensorboard":
         tb = TBLogger(out_dir)
         return tb if tb.w is not None else NoopLogger()

@@ -86,7 +86,6 @@ def main():
     )
     args = p.parse_args()
 
-    # device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # output dir and (possible) checkpoint
@@ -191,13 +190,12 @@ def main():
     # ---- graceful save on SIGINT/SIGTERM ----
     save_requested = {"flag": False}
 
-    def _on_term(sig, frame):
+    def _on_term(_, __):
         save_requested["flag"] = True
 
     signal.signal(signal.SIGTERM, _on_term)
     signal.signal(signal.SIGINT, _on_term)
 
-    # ---- train loop ----
     model.train()
     while step < args.steps:
         for xb, yb in train_loader:
@@ -223,7 +221,7 @@ def main():
             it_t0 = time.time()
             xb, yb = xb.to(device), yb.to(device)
             with torch.cuda.amp.autocast(enabled=amp.amp):
-                logits, loss, _ = model(xb, yb)
+                _, loss, _ = model(xb, yb)
             amp.backward(loss)
 
             if amp.should_step():
@@ -258,7 +256,6 @@ def main():
                         logger, model, tok, xb, device, step, max_new_tokens=64
                     )
 
-    # ---- final save ----
     atomic_save_all(
         model, optim, sched, amp, step, out_dir, tok_dir, args.keep_last_k, cfg_build
     )
