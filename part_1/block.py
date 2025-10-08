@@ -2,8 +2,10 @@ import torch.nn as nn
 from multi_head import MultiHeadSelfAttention
 from ffn import FeedForward
 
+
 class TransformerBlock(nn.Module):
     """1.6 Transformer block = LN → MHA → residual → LN → FFN → residual."""
+
     def __init__(self, d_model: int, n_head: int, dropout: float = 0.0):
         super().__init__()
         self.ln1 = nn.LayerNorm(d_model)

@@ -1,16 +1,22 @@
-# LLM from Scratch — Hands-On Curriculum (PyTorch)
+# GPT From Scratch - From Pre to Post
 
-[![Watch the video](https://img.youtube.com/vi/p3sij8QzONQ/0.jpg)](https://youtu.be/p3sij8QzONQ?si=yEuD584cBZRNiUYm)
+Repository based on the work of Vivek Kalyanarangan in [llm_from_scratch](https://github.com/vivekkalyanarangan30/llm_from_scratch).
 
-## Part 0 — Foundations & Mindset
-- **0.1** Understanding the high-level LLM training pipeline (pretraining → finetuning → alignment)
-- **0.2** Hardware & software environment setup (PyTorch, CUDA/Mac, mixed precision, profiling tools)
+[Watch the original video](https://youtu.be/p3sij8QzONQ?si=yEuD584cBZRNiUYm)
+
+## setup
 
 ```
 conda create -n llm_from_scratch python=3.11
 conda activate llm_from_scratch
 pip install -r requirements.txt
 ```
+
+## guide
+
+## Part 0 — Foundations & Mindset
+- **0.1** Understanding the high-level LLM training pipeline (pretraining → finetuning → alignment)
+- **0.2** Hardware & software environment setup (PyTorch, CUDA/Mac, mixed precision, profiling tools)
 
 ## Part 1 — Core Transformer Architecture
 - **1.1** Positional embeddings (absolute learned vs. sinusoidal)

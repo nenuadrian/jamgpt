@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 # ---- Blocks (self-contained for isolation) ----
 class CausalSelfAttention(nn.Module):
     def __init__(self, n_embd: int, n_head: int, dropout: float = 0.0):
@@ -24,10 +25,18 @@ class CausalSelfAttention(nn.Module):
         v = v.transpose(1, 2)
         scale = 1.0 / math.sqrt(self.d_head)
         # PyTorch SDPA (uses flash when available)
-        y = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout.p if self.training else 0.0, is_causal=True)
+        y = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            attn_mask=None,
+            dropout_p=self.dropout.p if self.training else 0.0,
+            is_causal=True,
+        )
         y = y.transpose(1, 2).contiguous().view(B, T, C)
         y = self.proj(y)
         return y
+
 
 class FeedForward(nn.Module):
     def __init__(self, n_embd: int, mult: int = 4, dropout: float = 0.0):
@@ -42,6 +51,7 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+
 class Block(nn.Module):
     def __init__(self, n_embd: int, n_head: int, dropout: float):
         super().__init__()
@@ -55,15 +65,26 @@ class Block(nn.Module):
         x = x + self.ffn(self.ln2(x))
         return x
 
+
 # ---- Tiny GPT ----
 class GPT(nn.Module):
-    def __init__(self, vocab_size: int, block_size: int, n_layer: int = 4, n_head: int = 4, n_embd: int = 256, dropout: float = 0.0):
+    def __init__(
+        self,
+        vocab_size: int,
+        block_size: int,
+        n_layer: int = 4,
+        n_head: int = 4,
+        n_embd: int = 256,
+        dropout: float = 0.0,
+    ):
         super().__init__()
         self.block_size = block_size
         self.tok_emb = nn.Embedding(vocab_size, n_embd)
         self.pos_emb = nn.Embedding(block_size, n_embd)
         self.drop = nn.Dropout(dropout)
-        self.blocks = nn.ModuleList([Block(n_embd, n_head, dropout) for _ in range(n_layer)])
+        self.blocks = nn.ModuleList(
+            [Block(n_embd, n_head, dropout) for _ in range(n_layer)]
+        )
         self.ln_f = nn.LayerNorm(n_embd)
         self.head = nn.Linear(n_embd, vocab_size, bias=False)
 
@@ -93,15 +114,22 @@ class GPT(nn.Module):
         return logits, loss
 
     @torch.no_grad()
-    def generate(self, idx: torch.Tensor, max_new_tokens: int = 200, temperature: float = 1.0,
-                top_k: int | None = 50, top_p: float | None = None):
+    def generate(
+        self,
+        idx: torch.Tensor,
+        max_new_tokens: int = 200,
+        temperature: float = 1.0,
+        top_k: int | None = 50,
+        top_p: float | None = None,
+    ):
         from utils import top_k_top_p_filtering
+
         self.eval()
         # Guard: if the prompt is empty, start with a newline byte (10)
         if idx.size(1) == 0:
             idx = torch.full((idx.size(0), 1), 10, dtype=torch.long, device=idx.device)
         for _ in range(max_new_tokens):
-            idx_cond = idx[:, -self.block_size:]
+            idx_cond = idx[:, -self.block_size :]
             logits, _ = self(idx_cond)
             logits = logits[:, -1, :] / max(temperature, 1e-6)
             logits = top_k_top_p_filtering(logits, top_k=top_k, top_p=top_p)

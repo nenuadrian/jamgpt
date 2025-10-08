@@ -2,7 +2,6 @@ from __future__ import annotations
 import torch
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
-from typing import Tuple
 from tokenizer_bpe import BPETokenizer
 
 class TextBPEBuffer(Dataset):

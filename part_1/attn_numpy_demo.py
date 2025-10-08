@@ -11,28 +11,21 @@ Scores:     (1, 3, 3)   = Q @ K^T
 Weights:    (1, 3, 3)   = softmax over last dim
 Output:     (1, 3, 2)   = Weights @ V
 """
+
 import numpy as np
 
 np.set_printoptions(precision=4, suppress=True)
 
 # Toy inputs (batch=1, seq=3, d_model=4)
-X = np.array([[[0.1, 0.2, 0.3, 0.4],
-               [0.5, 0.4, 0.3, 0.2],
-               [0.0, 0.1, 0.0, 0.1]]], dtype=np.float32)
+X = np.array(
+    [[[0.1, 0.2, 0.3, 0.4], [0.5, 0.4, 0.3, 0.2], [0.0, 0.1, 0.0, 0.1]]],
+    dtype=np.float32,
+)
 
 # Weight matrices (learned in real models). We fix numbers for determinism.
-Wq = np.array([[ 0.2, -0.1],
-               [ 0.0,  0.1],
-               [ 0.1,  0.2],
-               [-0.1,  0.0]], dtype=np.float32)
-Wk = np.array([[ 0.1,  0.1],
-               [ 0.0, -0.1],
-               [ 0.2,  0.0],
-               [ 0.0,  0.2]], dtype=np.float32)
-Wv = np.array([[ 0.1,  0.0],
-               [-0.1,  0.1],
-               [ 0.2, -0.1],
-               [ 0.0,  0.2]], dtype=np.float32)
+Wq = np.array([[0.2, -0.1], [0.0, 0.1], [0.1, 0.2], [-0.1, 0.0]], dtype=np.float32)
+Wk = np.array([[0.1, 0.1], [0.0, -0.1], [0.2, 0.0], [0.0, 0.2]], dtype=np.float32)
+Wv = np.array([[0.1, 0.0], [-0.1, 0.1], [0.2, -0.1], [0.0, 0.2]], dtype=np.float32)
 
 # Project to Q, K, V
 Q = X @ Wq  # (1,3,2)
@@ -45,10 +38,10 @@ print("V shape:", V.shape, "\nV=\n", V[0])
 
 # Scaled dot-products
 scale = 1.0 / np.sqrt(Q.shape[-1])
-attn_scores = (Q @ K.transpose(0,2,1)) * scale  # (1,3,3)
+attn_scores = (Q @ K.transpose(0, 2, 1)) * scale  # (1,3,3)
 
 # Causal mask (upper triangle set to -inf so softmax->0)
-mask = np.triu(np.ones((1,3,3), dtype=bool), k=1)
+mask = np.triu(np.ones((1, 3, 3), dtype=bool), k=1)
 attn_scores = np.where(mask, -1e9, attn_scores)
 
 # Softmax over last dim

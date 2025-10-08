@@ -1,5 +1,6 @@
 import torch
 
+
 def causal_mask(T: int, device=None):
     """Returns a bool mask where True means *masked* (disallowed).
     Shape: (1, 1, T, T) suitable for broadcasting with (B, heads, T, T).

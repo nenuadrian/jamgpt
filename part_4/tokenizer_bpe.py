@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os, json
+import json
 from pathlib import Path
 from typing import List, Union
 

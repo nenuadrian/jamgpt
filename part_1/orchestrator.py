@@ -40,7 +40,11 @@ def run(cmd: str):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--visualize", action="store_true", help="run visualization scripts and save PNGs to ./out")
+    p.add_argument(
+        "--visualize",
+        action="store_true",
+        help="run visualization scripts and save PNGs to ./out",
+    )
     args = p.parse_args()
 
     OUT.mkdir(exist_ok=True)
