@@ -54,7 +54,7 @@ python train_ppo.py --policy_ckpt runs/sft/model_last.pt --reward_ckpt runs/rm-d
 
 python train_grpo.py --group_size 4 --policy_ckpt runs/sft/model_last.pt --reward_ckpt runs/rm-demo/model_last.pt --steps 200 --batch_prompts 4 --resp_len 128 --bpe_dir runs/base/tokenizer --thinking_bonus 0.0
 
-python chat_ui.py --ckpt runs/grpo-demo/model_last.pt --bpe_dir runs/tokenizer/tokenizer --share
+python chat_ui.py --ckpt runs/grpo-demo/model_last.pt --bpe_dir runs/base/tokenizer --share
 ```
 
 ## guide
