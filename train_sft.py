@@ -2,6 +2,7 @@ from __future__ import annotations
 import argparse, torch
 import torch.nn as nn
 from pathlib import Path
+from tqdm import tqdm
 
 torch.manual_seed(0)
 
@@ -31,9 +32,7 @@ def main():
     p.add_argument("--n_embd", type=int, default=256)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--cpu", action="store_true")
-    p.add_argument(
-        "--bpe_dir", type=str, default="runs/tokenizer/tokenizer"
-    )
+    p.add_argument("--bpe_dir", type=str, default="runs/tokenizer/tokenizer")
     args = p.parse_args()
 
     device = torch.device(
@@ -80,6 +79,7 @@ def main():
     # Simple loop (single machine). We just cycle curriculum to fill batches, for a few steps.
     step = 0
     i = 0
+    pbar = tqdm(total=args.steps, desc="SFT Training")
     while step < args.steps:
         batch = cur[i : i + args.batch_size]
         if not batch:
@@ -95,9 +95,14 @@ def main():
         opt.step()
         step += 1
         i += args.batch_size
+
+        pbar.update(1)
+        pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+
         if step % 20 == 0:
             print(f"step {step}: loss={loss.item():.4f}")
 
+    pbar.close()
     Path(args.out).mkdir(parents=True, exist_ok=True)
     cfg = {
         "vocab_size": col.vocab_size,

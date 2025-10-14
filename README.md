@@ -46,7 +46,7 @@ GPTModern(
 ```bash
 python train_base.py --data data/harrypotter.txt --out runs/base --bpe --vocab_size 8000 --epochs 1 --steps 300 --batch_size 16 --block_size 128 --n_layer 2 --n_head 2 --n_embd 128 --mixed_precision --grad_accum_steps 2 --log tensorboard
 
-python train_sft.py --data huggingface --ckpt runs/base/model_last.pt --out runs/sft --steps 300 --batch_size 8 --block_size 256 --n_layer 2 --n_head 2 --n_embd 128
+python train_sft.py --data huggingface --ckpt runs/base/model_last.pt --out runs/sft --steps 300 --batch_size 8 --block_size 256 --n_layer 2 --n_head 2 --n_embd 128 --bpe_dir runs/base/tokenizer
 
 python train_rm.py --steps 300 --batch_size 8 --block_size 256 --n_layer 2 --n_head 2 --n_embd 128 --loss bt --bpe_dir runs/base/tokenizer
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 import argparse, torch
 from pathlib import Path
+from tqdm import tqdm
 
 from policy import PolicyWithValue  # we will ignore the value head
 from rollout import RLHFTokenizer, sample_prompts, model_logprobs
@@ -124,6 +125,7 @@ def main():
     pool_idx = 0
     G = args.group_size
 
+    pbar = tqdm(total=args.steps, desc="GRPO Training")
     while step < args.steps:
         # ----- SELECT PROMPTS -----
         # Choose P prompts, each will yield G completions → B = P*G trajectories
@@ -307,12 +309,25 @@ def main():
             )
 
         step += 1
+
+        # Update progress bar
+        pbar.update(1)
+        pbar.set_postfix(
+            {
+                "loss": f"{loss.item():.4f}",
+                "KL_move": f"{kl_move.item():.6f}",
+                "KL_ref": f"{kl_ref_now.item():.6f}",
+                "avg_reward": f"{raw_rewards_t.mean().item():.3f}",
+            }
+        )
+
         if step % 10 == 0:
             print(
                 f"step {step} | loss {loss.item():.4f}"
                 f"| KL_move {kl_move.item():.6f} | KL_ref {kl_ref_now.item():.6f}"
             )
 
+    pbar.close()
     Path(args.out).mkdir(parents=True, exist_ok=True)
     torch.save(
         {

@@ -3,6 +3,7 @@ import argparse, time, signal
 from pathlib import Path
 
 import torch
+from tqdm import tqdm
 
 from model_modern import GPTModern
 
@@ -197,6 +198,7 @@ def main():
     signal.signal(signal.SIGINT, _on_term)
 
     model.train()
+    pbar = tqdm(total=args.steps, initial=step, desc="Training")
     while step < args.steps:
         for xb, yb in train_loader:
             if step >= args.steps:
@@ -213,6 +215,7 @@ def main():
                     args.keep_last_k,
                     cfg_build,
                 )
+                pbar.close()
                 print(
                     f"[signal] Saved checkpoint at step {step} to {out_dir}. Exiting."
                 )
@@ -229,6 +232,10 @@ def main():
                 amp.zero_grad()
                 lr = sched.step()
                 step += 1
+
+                # Update progress bar
+                pbar.update(1)
+                pbar.set_postfix({"loss": f"{loss.item():.4f}", "lr": f"{lr:.2e}"})
 
                 # periodic checkpoint
                 if step % args.save_every == 0:
@@ -256,6 +263,7 @@ def main():
                         logger, model, tok, xb, device, step, max_new_tokens=64
                     )
 
+    pbar.close()
     atomic_save_all(
         model, optim, sched, amp, step, out_dir, tok_dir, args.keep_last_k, cfg_build
     )
