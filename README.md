@@ -52,7 +52,7 @@ python train_rm.py --steps 300 --batch_size 8 --block_size 256 --n_layer 2 --n_h
 
 python train_ppo.py --policy_ckpt runs/sft/model_last.pt --reward_ckpt runs/rm-demo/model_last.pt --steps 100 --batch_size 4 --resp_len 128 --bpe_dir runs/base/tokenizer
 
-python train_grpo.py --group_size 4 --policy_ckpt runs/sft/model_last.pt --reward_ckpt runs/rm-demo/model_last.pt --steps 200 --batch_prompts 4 --resp_len 128 --bpe_dir runs/base/tokenizer
+python train_grpo.py --group_size 4 --policy_ckpt runs/sft/model_last.pt --reward_ckpt runs/rm-demo/model_last.pt --steps 200 --batch_prompts 4 --resp_len 128 --bpe_dir runs/base/tokenizer --thinking_bonus 0.0
 ```
 
 ## guide

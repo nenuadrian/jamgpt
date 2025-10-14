@@ -18,6 +18,7 @@ def compute_reward(
     prompt_text: str,
     response_ids: list[int],
     device,
+    thinking_bonus: float = 0.0,
 ) -> float:
     # Build full formatted text (as in your PPO)
     resp_text = tok.decode(response_ids)
@@ -25,15 +26,29 @@ def compute_reward(
     ids = tok.encode(text)
     x = torch.tensor([ids[: tok.block_size]], dtype=torch.long, device=device)
     r = reward_model(x)
-    return float(r[0].item())
+    base_reward = float(r[0].item())
+
+    # Add bonus for using thinking tags
+    bonus = 0.0
+    if thinking_bonus > 0.0:
+        # Check if response contains both opening and closing thinking tags
+        has_opening = "<thinking>" in resp_text
+        has_closing = "</thinking>" in resp_text
+
+        if has_opening and has_closing:
+            # Full bonus for properly paired tags
+            bonus = thinking_bonus
+        elif has_opening or has_closing:
+            # Partial bonus for at least attempting to use tags
+            bonus = thinking_bonus * 0.5
+
+    return base_reward + bonus
 
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out", type=str, default="runs/grpo-demo")
-    p.add_argument(
-        "--policy_ckpt", type=str, required=True, help="SFT checkpoint"
-    )
+    p.add_argument("--policy_ckpt", type=str, required=True, help="SFT checkpoint")
     p.add_argument(
         "--reward_ckpt",
         type=str,
@@ -54,6 +69,12 @@ def main():
     p.add_argument("--lr", type=float, default=1e-5)
     p.add_argument("--bpe_dir", type=str, default=None)
     p.add_argument("--cpu", action="store_true")
+    p.add_argument(
+        "--thinking_bonus",
+        type=float,
+        default=0.0,
+        help="Bonus reward for using <thinking> tags (0.0 = disabled)",
+    )
     args = p.parse_args()
 
     device = torch.device(
@@ -143,7 +164,12 @@ def main():
                     )  # prompt length clipped to context
                     resp_ids = full_ids[boundary:]
                     r_scalar = compute_reward(
-                        rm, tok, batch_prompts[pid], resp_ids, device
+                        rm,
+                        tok,
+                        batch_prompts[pid],
+                        resp_ids,
+                        device,
+                        args.thinking_bonus,
                     )
 
                     seq_list.append(torch.tensor(full_ids, dtype=torch.long))
