@@ -23,9 +23,9 @@ def load_model(ckpt_path: str, bpe_dir: str, device):
     # Load tokenizer
     tok = RLHFTokenizer(block_size=block_size, bpe_dir=bpe_dir)
 
-    # Load model
+    # Load model - the checkpoint contains PolicyWithValue state dict
     model = PolicyWithValue(vocab_size, block_size, n_layer, n_head, n_embd).to(device)
-    model.lm.load_state_dict(ckpt["model"])
+    model.load_state_dict(ckpt["model"])
     model.eval()
 
     return model, tok, cfg
