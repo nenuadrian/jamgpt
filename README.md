@@ -1,5 +1,7 @@
 # JamGPT - LLM From Scratch - From Pre to Post
 
+![logo](./assets/jamgpt.png)
+
 Repository based on the work of Vivek Kalyanarangan in [llm_from_scratch](https://github.com/vivekkalyanarangan30/llm_from_scratch).
 
 [Watch the original video](https://youtu.be/p3sij8QzONQ?si=yEuD584cBZRNiUYm)
