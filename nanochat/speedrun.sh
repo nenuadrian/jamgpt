@@ -58,8 +58,6 @@ uv run maturin develop --release --manifest-path rustbpe/Cargo.toml
 # Download the first ~2B characters of pretraining dataset
 # look at dev/repackage_data_reference.py for details on how this data was prepared
 # each data shard is ~250M chars
-# so we download 2e9 / 250e6 = 8 data shards at this point
-# each shard is ~100MB of text (compressed), so this is about ~800MB of data on disk
 python -m nanochat.dataset -n 8
 # Immediately also kick off downloading more shards in the background while tokenizer trains
 # See comment below for why 240 is the right number here
@@ -92,25 +90,25 @@ echo "Waiting for dataset download to complete..."
 wait $DATASET_DOWNLOAD_PID
 
 # pretrain the d20 model
-torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- --depth=20 --run=$WANDB_RUN
+torchrun --standalone --nproc_per_node=2 -m scripts.base_train -- --depth=20 --run=$WANDB_RUN
 # evaluate the model on a larger chunk of train/val data and draw some samples
-torchrun --standalone --nproc_per_node=8 -m scripts.base_loss
+torchrun --standalone --nproc_per_node=2 -m scripts.base_loss
 # evaluate the model on CORE tasks
-torchrun --standalone --nproc_per_node=8 -m scripts.base_eval
+torchrun --standalone --nproc_per_node=2 -m scripts.base_eval
 
 # -----------------------------------------------------------------------------
 # Midtraining (teach the model conversation special tokens, tool use, multiple choice)
 
 # run midtraining and eval the model
-torchrun --standalone --nproc_per_node=8 -m scripts.mid_train -- --run=$WANDB_RUN
-torchrun --standalone --nproc_per_node=8 -m scripts.chat_eval -- -i mid
+torchrun --standalone --nproc_per_node=2 -m scripts.mid_train -- --run=$WANDB_RUN
+torchrun --standalone --nproc_per_node=2 -m scripts.chat_eval -- -i mid
 
 # -----------------------------------------------------------------------------
 # Supervised Finetuning (domain adaptation to each sequence all by itself per row)
 
 # train sft and re-eval right away (should see a small bump)
-torchrun --standalone --nproc_per_node=8 -m scripts.chat_sft -- --run=$WANDB_RUN
-torchrun --standalone --nproc_per_node=8 -m scripts.chat_eval -- -i sft
+torchrun --standalone --nproc_per_node=2 -m scripts.chat_sft -- --run=$WANDB_RUN
+torchrun --standalone --nproc_per_node=2 -m scripts.chat_eval -- -i sft
 
 # chat with the model over CLI! Leave out the -p to chat interactively
 # python -m scripts.chat_cli -p "Why is the sky blue?"
@@ -123,9 +121,9 @@ torchrun --standalone --nproc_per_node=8 -m scripts.chat_eval -- -i sft
 # (optional)
 
 # run reinforcement learning
-# torchrun --standalone --nproc_per_node=8 -m scripts.chat_rl -- --run=$WANDB_RUN
+# torchrun --standalone --nproc_per_node=2 -m scripts.chat_rl -- --run=$WANDB_RUN
 # eval the RL model only on GSM8K
-# torchrun --standalone --nproc_per_node=8 -m scripts.chat_eval -- -i rl -a GSM8K
+# torchrun --standalone --nproc_per_node=2 -m scripts.chat_eval -- -i rl -a GSM8K
 
 # -----------------------------------------------------------------------------
 # Generate the full report by putting together all the sections
