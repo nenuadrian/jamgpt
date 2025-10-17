@@ -31,7 +31,7 @@ html_static_path = ["_static"]
 
 
 # AutoAPI configuration
-autoapi_dirs = ["."]  # Path to your source code (adjust as needed)
+autoapi_dirs = ["llm_from_scratch"]  # Path to your source code (adjust as needed)
 autoapi_type = "python"
 autoapi_options = [
     "members",
