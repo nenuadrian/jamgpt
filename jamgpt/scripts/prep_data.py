@@ -1,8 +1,9 @@
 import os
 import time
 import argparse
+import shutil
 
-from datasets import load_dataset
+
 import pyarrow.parquet as pq
 import pyarrow as pa
 
@@ -12,7 +13,7 @@ def parse_args():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="/Volumes/StorageT7",
+        default="/Volumes/StorageT4/data/fineweb-edu-parquet-shards/sample-100BT",
         help="Output directory for parquet shards",
     )
     parser.add_argument(
@@ -48,11 +49,23 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
 
+    # Set cache directory to be within output directory
+    cache_dir = os.path.join(args.output_dir, ".cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    os.environ["HF_HOME"] = cache_dir
+    os.environ["HF_DATASETS_CACHE"] = os.path.join(cache_dir, "datasets")
+    os.environ["HF_MODULES_CACHE"] = os.path.join(cache_dir, "modules")
+    os.environ["TRANSFORMERS_CACHE"] = os.path.join(cache_dir, "transformers")
+
+    from datasets import load_dataset
+
     DATASET_KWARGS = {
         "path": args.dataset_path,
         "split": args.dataset_split,
         "name": args.dataset_name,
+        "cache_dir": cache_dir,
     }
+    print(f"Using cache directory at {cache_dir}")
     chars_per_shard = args.chars_per_shard
     row_group_size = args.row_group_size
 
@@ -103,3 +116,9 @@ if __name__ == "__main__":
                 f"time spent: {time_spent:.2f} seconds, "
                 f"estimated remaining time: {remaining_time:.2f} seconds"
             )
+
+    # Clean up default HuggingFace cache if requested
+    if os.path.exists(cache_dir):
+        print(f"Cleaning up cache at {cache_dir}")
+        shutil.rmtree(cache_dir)
+        print("Cache cleaned up successfully")
