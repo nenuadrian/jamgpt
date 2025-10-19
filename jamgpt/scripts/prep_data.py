@@ -1,0 +1,105 @@
+import os
+import time
+import argparse
+
+from datasets import load_dataset
+import pyarrow.parquet as pq
+import pyarrow as pa
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Prepare dataset for training")
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="/Volumes/StorageT7",
+        help="Output directory for parquet shards",
+    )
+    parser.add_argument(
+        "--dataset_path",
+        type=str,
+        default="HuggingFaceFW/fineweb-edu",
+        help="Dataset path",
+    )
+    parser.add_argument(
+        "--dataset_name", type=str, default="sample-100BT", help="Dataset name/config"
+    )
+    parser.add_argument(
+        "--dataset_split", type=str, default="train", help="Dataset split"
+    )
+    parser.add_argument(
+        "--chars_per_shard",
+        type=int,
+        default=250_000_000,
+        help="Number of characters per shard",
+    )
+    parser.add_argument(
+        "--row_group_size",
+        type=int,
+        default=1024,
+        help="Row group size for parquet files",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Random seed for shuffling"
+    )
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+
+    DATASET_KWARGS = {
+        "path": args.dataset_path,
+        "split": args.dataset_split,
+        "name": args.dataset_name,
+    }
+    chars_per_shard = args.chars_per_shard
+    row_group_size = args.row_group_size
+
+    ds = load_dataset(**DATASET_KWARGS)
+
+    ds = ds.shuffle(seed=args.seed)
+    ndocs = len(ds)
+    print(f"Number of documents: {ndocs}")
+
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    shard_docs = []
+    shard_index = 0
+    shard_chars = 0
+    docs_processed = 0
+    time_spent = 0
+    time_start = time.time()
+
+    for doc in ds:
+        shard_docs.append(doc)
+        shard_chars += len(doc["text"])
+        docs_processed += 1
+        docs_multiple_of_row_group = docs_processed % row_group_size == 0
+        shard_docs.append(doc["text"])
+        if shard_chars >= chars_per_shard and docs_multiple_of_row_group:
+            table = pa.Table.from_pydict({"text": shard_docs})
+
+            pq.write_table(
+                table,
+                os.path.join(args.output_dir, f"shard_{shard_index:05d}.parquet"),
+                row_group_size=row_group_size,
+                use_dictionary=False,
+                compression="zstd",
+                compression_level=3,
+                write_statistics=False,
+            )
+            shard_index += 1
+            shard_docs = []
+            shard_chars = 0
+
+            time_end = time.time()
+            time_spent += time_end - time_start
+            time_start = time_end
+            remaining_time = time_spent / docs_processed * (ndocs - docs_processed)
+            print(
+                f"Processed {docs_processed}/{ndocs} documents "
+                f"({docs_processed/ndocs*100:.2f}%), "
+                f"time spent: {time_spent:.2f} seconds, "
+                f"estimated remaining time: {remaining_time:.2f} seconds"
+            )
