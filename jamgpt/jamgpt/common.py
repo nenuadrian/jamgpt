@@ -11,7 +11,9 @@ def list_parquet_files(data_dir=None):
         [
             f
             for f in os.listdir(data_dir)
-            if f.endswith(".parquet") and not f.endswith(".tmp")
+            if f.endswith(".parquet")
+            and not f.endswith(".tmp")
+            and not f.startswith(".")
         ]
     )
     parquet_paths = [os.path.join(data_dir, f) for f in parquet_files]
@@ -28,6 +30,7 @@ def parquets_iter_batched(split, data_dir: str, start=0, step=1):
     parquet_paths = list_parquet_files(data_dir=data_dir)
     parquet_paths = parquet_paths[:-1] if split == "train" else parquet_paths[-1:]
     for filepath in parquet_paths:
+        print(f"Loading parquet file: {filepath}")
         pf = pq.ParquetFile(filepath)
         for rg_idx in range(start, pf.num_row_groups, step):
             rg = pf.read_row_group(rg_idx)

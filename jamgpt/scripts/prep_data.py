@@ -64,6 +64,7 @@ if __name__ == "__main__":
         "split": args.dataset_split,
         "name": args.dataset_name,
         "cache_dir": cache_dir,
+        "streaming": True,
     }
     print(f"Using cache directory at {cache_dir}")
     chars_per_shard = args.chars_per_shard
@@ -72,8 +73,6 @@ if __name__ == "__main__":
     ds = load_dataset(**DATASET_KWARGS)
 
     ds = ds.shuffle(seed=args.seed)
-    ndocs = len(ds)
-    print(f"Number of documents: {ndocs}")
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -85,12 +84,10 @@ if __name__ == "__main__":
     time_start = time.time()
 
     for doc in ds:
-        shard_docs.append(doc)
         shard_chars += len(doc["text"])
         docs_processed += 1
-        docs_multiple_of_row_group = docs_processed % row_group_size == 0
         shard_docs.append(doc["text"])
-        if shard_chars >= chars_per_shard and docs_multiple_of_row_group:
+        if shard_chars >= chars_per_shard and docs_processed % row_group_size == 0:
             table = pa.Table.from_pydict({"text": shard_docs})
 
             pq.write_table(
@@ -109,12 +106,9 @@ if __name__ == "__main__":
             time_end = time.time()
             time_spent += time_end - time_start
             time_start = time_end
-            remaining_time = time_spent / docs_processed * (ndocs - docs_processed)
             print(
-                f"Processed {docs_processed}/{ndocs} documents "
-                f"({docs_processed/ndocs*100:.2f}%), "
-                f"time spent: {time_spent:.2f} seconds, "
-                f"estimated remaining time: {remaining_time:.2f} seconds"
+                f"Processed {docs_processed} documents "
+                f"time spent: {time_spent:.2f} seconds"
             )
 
     # Clean up default HuggingFace cache if requested

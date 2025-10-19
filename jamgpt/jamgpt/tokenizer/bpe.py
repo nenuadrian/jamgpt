@@ -234,8 +234,8 @@ def get_tokenizer():
 
     base_dir = get_base_dir()
     tokenizer_dir = os.path.join(base_dir, "tokenizer")
-    # return HuggingFaceTokenizer.from_directory(tokenizer_dir)
-    return RustBPETokenizer.from_directory(tokenizer_dir)
+    print(f"Loading tokenizer from {tokenizer_dir}...")
+    return BPETokenizer.from_directory(tokenizer_dir)
 
 
 def get_token_bytes(device="cpu"):
