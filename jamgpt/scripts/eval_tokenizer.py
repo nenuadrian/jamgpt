@@ -233,7 +233,7 @@ def main():
         tokenizer_results[tokenizer_name] = {}
 
         for name, text in get_test_texts().items():
-            encoded = tokenizer.encode([text])[0]
+            encoded = tokenizer.encode_batch([text])[0]
             decoded = tokenizer.decode(encoded)
             assert decoded == text
 

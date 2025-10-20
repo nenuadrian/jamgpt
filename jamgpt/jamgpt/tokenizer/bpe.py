@@ -76,10 +76,12 @@ class BPETokenizer:
     def get_bos_token_id(self) -> int:
         return self.bos_token_id
 
-    def encode(
+    def encode_batch(
         self, text: list[str], prepend=None, append=None, num_threads=8
     ) -> list[list[int]]:
-        token_batches = self.encoding.encode_ordinary_batch(text, num_threads=num_threads)
+        token_batches = self.encoding.encode_ordinary_batch(
+            text, num_threads=num_threads
+        )
         prepend_id = (
             prepend
             if isinstance(prepend, int)
@@ -99,7 +101,7 @@ class BPETokenizer:
         return token_batches
 
     def __call__(self, text: str) -> list[int]:
-        return self.encode([text])
+        return self.encode_batch([text])
 
     def decode(self, token_ids: list[int]) -> str:
         return self.encoding.decode(token_ids)
@@ -175,7 +177,7 @@ class BPETokenizer:
                 assert isinstance(
                     content, str
                 ), "User messages are simply expected to be strings"
-                value_ids = self.encode(content)
+                value_ids = self.encode_batch([content])[0]
                 add_tokens(user_start, 0)
                 add_tokens(value_ids, 0)
                 add_tokens(user_end, 0)
@@ -183,11 +185,11 @@ class BPETokenizer:
                 add_tokens(assistant_start, 0)
                 if isinstance(content, str):
                     # simple string => simply add the tokens
-                    value_ids = self.encode(content)
+                    value_ids = self.encode_batch([content])[0]
                     add_tokens(value_ids, 1)
                 elif isinstance(content, list):
                     for part in content:
-                        value_ids = self.encode(part["text"])
+                        value_ids = self.encode_batch([part["text"]])[0]
                         if part["type"] == "text":
                             # string part => simply add the tokens
                             add_tokens(value_ids, 1)

@@ -255,7 +255,7 @@ def test_interface(enwik8_small):
 
     # Encode/decode text
     encode_text = "Hello world! How are you? 🙃"
-    ids = tok.encode([encode_text])
+    ids = tok.encode_batch([encode_text])
     print(f"\nInput text: {encode_text}")
     print(f"IDs: {ids}")
     decoded = tok.decode(ids[0])
@@ -266,14 +266,14 @@ def test_interface(enwik8_small):
     print("✅ Encode/decode test passed")
 
     # Encode batch test
-    ids_new = tok.encode([encode_text, encode_text])
+    ids_new = tok.encode_batch([encode_text, encode_text])
     assert all(
         x == ids[0] for x in ids_new
     ), "Batch encoding should produce identical results"
     print("✅ Encode batch OK")
 
     # append/prepend functionality
-    ids_special = tok.encode([encode_text], prepend="<|bos|>", append="<|bos|>")
+    ids_special = tok.encode_batch([encode_text], prepend="<|bos|>", append="<|bos|>")
     bos_token_id = tok.encode_special("<|bos|>")
     assert ids_special[0] == [bos_token_id] + ids[0] + [
         bos_token_id
@@ -284,6 +284,6 @@ def test_interface(enwik8_small):
     with tempfile.TemporaryDirectory() as tmp_dir:
         tok.save_to_directory(tmp_dir)
         tok_reloaded = BPETokenizer.from_directory(tmp_dir)
-        ids_reloaded = tok_reloaded.encode([encode_text])
+        ids_reloaded = tok_reloaded.encode_batch([encode_text])
         assert ids_reloaded == ids, "Reloaded tokenizer should produce same results"
         print("✅ Save/load through temporary directory OK")
