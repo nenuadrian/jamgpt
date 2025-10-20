@@ -4,3 +4,4 @@ __pycache__/
 runs/
 _build/
 autoapi/
+jamgpt.egg-info

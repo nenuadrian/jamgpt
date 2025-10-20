@@ -78,19 +78,25 @@ class BPETokenizer:
 
     def encode(
         self, text: list[str], prepend=None, append=None, num_threads=8
-    ) -> list[int]:
-        token_ids = self.encoding.encode_ordinary_batch(text, num_threads=num_threads)
-        if prepend is not None:
-            prepend_id = (
-                prepend if isinstance(prepend, int) else self.encode_special(prepend)
-            )
-            token_ids = [prepend_id] + token_ids
-        if append is not None:
-            append_id = (
-                append if isinstance(append, int) else self.encode_special(append)
-            )
-            token_ids = token_ids + [append_id]
-        return token_ids
+    ) -> list[list[int]]:
+        token_batches = self.encoding.encode_ordinary_batch(text, num_threads=num_threads)
+        prepend_id = (
+            prepend
+            if isinstance(prepend, int)
+            else self.encode_special(prepend) if prepend is not None else None
+        )
+        append_id = (
+            append
+            if isinstance(append, int)
+            else self.encode_special(append) if append is not None else None
+        )
+
+        if prepend_id is not None:
+            token_batches = [[prepend_id] + seq for seq in token_batches]
+        if append_id is not None:
+            token_batches = [seq + [append_id] for seq in token_batches]
+
+        return token_batches
 
     def __call__(self, text: str) -> list[int]:
         return self.encode([text])

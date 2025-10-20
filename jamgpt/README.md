@@ -6,7 +6,7 @@ Implemented from 0 to hero based on multiple other repositories and videos such 
 conda create -n jamgpt python=3.13 -y
 conda activate jamgpt
 
-pip install datasets pyarrow tiktoken maturin torch
+pip install datasets pyarrow tiktoken maturin torch pytest tokenizers requests
 ```
 
 ## Tokenizer

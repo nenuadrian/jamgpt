@@ -13,9 +13,14 @@ into tiktoken and use it for inference with identical results.
 """
 
 import time
-import jamgpt.rustbpe as rustbpe
 import tiktoken
 import pytest
+import requests
+from jamgpt import rustbpe
+from jamgpt import BPETokenizer
+
+import tempfile
+
 
 GPT4_SPLIT_PATTERN = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""
 
@@ -89,7 +94,7 @@ def enwik8_path():
     """Fixture to download and cache enwik8 dataset."""
     import os
     import zipfile
-    from nanochat.common import get_base_dir
+    from jamgpt.common import get_base_dir
 
     base_dir = get_base_dir()
     # download and unzip enwik8 to .cache directory
@@ -98,7 +103,6 @@ def enwik8_path():
     enwik8_local_path_zip = os.path.join(base_dir, "enwik8.zip")
     if not os.path.exists(enwik8_local_path):
         print(f"Downloading enwik8 to {enwik8_local_path_zip}")
-        import requests
 
         response = requests.get(enwik8_url)
         with open(enwik8_local_path_zip, "wb") as f:
@@ -240,8 +244,6 @@ def test_training_performance(enwik8_large):
 
 def test_interface(enwik8_small):
     """Test the BPETokenizer interface for training, encoding, decoding, and serialization."""
-    import tempfile
-    from jamgpt.tokenizer import BPETokenizer
 
     # Simple train test
     vocab_size = 300
@@ -253,10 +255,10 @@ def test_interface(enwik8_small):
 
     # Encode/decode text
     encode_text = "Hello world! How are you? 🙃"
-    ids = tok.encode(encode_text)
+    ids = tok.encode([encode_text])
     print(f"\nInput text: {encode_text}")
     print(f"IDs: {ids}")
-    decoded = tok.decode(ids)
+    decoded = tok.decode(ids[0])
     print(f"Decoded: {decoded}")
     assert (
         decoded == encode_text
@@ -266,22 +268,22 @@ def test_interface(enwik8_small):
     # Encode batch test
     ids_new = tok.encode([encode_text, encode_text])
     assert all(
-        x == ids for x in ids_new
+        x == ids[0] for x in ids_new
     ), "Batch encoding should produce identical results"
     print("✅ Encode batch OK")
 
     # append/prepend functionality
-    ids_special = tok.encode(encode_text, prepend="<|bos|>", append="<|bos|>")
+    ids_special = tok.encode([encode_text], prepend="<|bos|>", append="<|bos|>")
     bos_token_id = tok.encode_special("<|bos|>")
-    assert ids_special == [bos_token_id] + ids + [
+    assert ids_special[0] == [bos_token_id] + ids[0] + [
         bos_token_id
     ], "Special tokens not correctly added"
     print("✅ append/prepend OK")
 
     # Save/load test through a temporary directory
     with tempfile.TemporaryDirectory() as tmp_dir:
-        tok.save(tmp_dir)
+        tok.save_to_directory(tmp_dir)
         tok_reloaded = BPETokenizer.from_directory(tmp_dir)
-        ids_reloaded = tok_reloaded.encode(encode_text)
+        ids_reloaded = tok_reloaded.encode([encode_text])
         assert ids_reloaded == ids, "Reloaded tokenizer should produce same results"
         print("✅ Save/load through temporary directory OK")
