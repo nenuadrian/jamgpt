@@ -83,10 +83,6 @@ def get_dist_info():
 
 def compute_init():
     """Basic initialization that we keep doing over and over, so make common."""
-
-    # CUDA is currently required
-    assert torch.cuda.is_available(), "CUDA is needed for a distributed run atm"
-
     # Reproducibility
     torch.manual_seed(42)
     torch.cuda.manual_seed(42)
