@@ -17,7 +17,7 @@ def parse_args():
         help="Output directory for parquet shards",
     )
     parser.add_argument(
-        "--dataset_path",
+        "--data_dir",
         type=str,
         default="HuggingFaceFW/fineweb-edu",
         help="Dataset path",
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     from datasets import load_dataset
 
     DATASET_KWARGS = {
-        "path": args.dataset_path,
+        "path": args.data_dir,
         "split": args.dataset_split,
         "name": args.dataset_name,
         "cache_dir": cache_dir,

@@ -1,6 +1,7 @@
 import math
 from dataclasses import dataclass
 from jamgpt.gpt import GPT
+from jamgpt.dataloader import tokenizing_distributed_data_loader
 
 WARMUP_RATIO = 0.0
 WARMDOWN_RATIO = 0.2
@@ -13,10 +14,14 @@ class PreTrainerConfigs:
     embedding_lr: float
     matrix_lr: float
     weight_decay: float
+    device_batch_size: float
+    data_dir: str
 
 
 class PreTrainer:
-    def __init__(self, config: PreTrainerConfigs, model: GPT, num_iterations: int):
+    def __init__(
+        self, config: PreTrainerConfigs, model: GPT, tokenizer, num_iterations: int
+    ):
         self.model = model
         self.num_iterations = num_iterations
 
@@ -26,6 +31,24 @@ class PreTrainer:
             matrix_lr=config.matrix_lr,
             weight_decay=config.weight_decay,
         )
+
+        self.train_loader = tokenizing_distributed_data_loader(
+            B=config.device_batch_size,
+            T=config.sequence_len,
+            split="train",
+            data_dir=config.data_dir,
+            tokenizer=tokenizer,
+        )
+        self.build_val_loader = lambda: tokenizing_distributed_data_loader(
+            B=config.device_batch_size,
+            T=config.sequence_len,
+            split="val",
+            data_dir=config.data_dir,
+            tokenizer=tokenizer,
+        )
+
+    def train(self):
+        x, y = next(self.train_loader)
 
     def get_learning_rate_multiplier(self, it):
         """Get learning rate multiplier for a given iteration."""

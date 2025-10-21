@@ -8,5 +8,6 @@ from .tokenizer.bpe import BPETokenizer
 import rustbpe
 
 import optimizers
+import dataloader
 
-__all__ = ["BPETokenizer", "rustbpe", "optimizers"]
+__all__ = ["BPETokenizer", "rustbpe", "optimizers", "dataloader"]

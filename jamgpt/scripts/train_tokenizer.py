@@ -4,7 +4,7 @@ import argparse
 import torch
 
 from jamgpt.tokenizer.bpe import BPETokenizer
-from jamgpt.common import get_base_dir, parquets_iter_batched
+from jamgpt.dataloader import parquets_iter_batched
 
 
 def parse_args():
@@ -32,6 +32,12 @@ def parse_args():
         type=str,
         default="/Volumes/StorageT4/data/fineweb-edu-parquet-shards/sample-100BT",
         help="Directory containing parquet data files",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        required=True,
+        help="Directory to save the trained tokenizer",
     )
     return parser.parse_args()
 
@@ -95,13 +101,11 @@ def main():
     print(f"Tokenizer training completed in {end_time - start_time:.2f} seconds.")
 
     # Save tokenizer
-    base_dir = get_base_dir()
-    tokenizer_dir = os.path.join(base_dir, "tokenizer")
-    os.makedirs(tokenizer_dir, exist_ok=True)
-    tokenizer.save_to_directory(tokenizer_dir)
-    print(f"Tokenizer saved to {tokenizer_dir}")
+    os.makedirs(args.output_dir, exist_ok=True)
+    tokenizer.save_to_directory(args.output_dir)
+    print(f"Tokenizer saved to {args.output_dir}")
 
-    save_token_bytes(tokenizer, tokenizer_dir)
+    save_token_bytes(tokenizer, args.output_dir)
 
 
 if __name__ == "__main__":

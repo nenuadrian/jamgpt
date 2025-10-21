@@ -94,9 +94,8 @@ def enwik8_path():
     """Fixture to download and cache enwik8 dataset."""
     import os
     import zipfile
-    from jamgpt.common import get_base_dir
 
-    base_dir = get_base_dir()
+    base_dir = tempfile.gettempdir()
     # download and unzip enwik8 to .cache directory
     enwik8_url = "https://mattmahoney.net/dc/enwik8.zip"
     enwik8_local_path = os.path.join(base_dir, "enwik8")

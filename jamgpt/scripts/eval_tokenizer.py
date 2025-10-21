@@ -1,7 +1,7 @@
 import argparse
 
-from jamgpt.tokenizer.bpe import get_tokenizer, BPETokenizer
-from jamgpt.common import parquets_iter_batched
+from jamgpt.tokenizer.bpe import BPETokenizer
+from jamgpt.dataloader import parquets_iter_batched
 
 
 def parse_args():
@@ -15,9 +15,15 @@ def parse_args():
     parser.add_argument(
         "--tokenizers",
         nargs="+",
-        choices=["gpt2", "gpt4", "ours"],
-        default=["gpt2", "gpt4", "ours"],
+        choices=["gpt2", "gpt4", "custom"],
+        default=["gpt2", "gpt4", "custom"],
         help="Tokenizers to evaluate (default: all)",
+    )
+    parser.add_argument(
+        "--custom_tokenizer_model",
+        type=str,
+        default=None,
+        help="Path to custom tokenizer model directory (required if 'custom' is in --tokenizers)",
     )
     parser.add_argument(
         "--skip_fwe",
@@ -227,7 +233,8 @@ def main():
         elif tokenizer_name == "gpt4":
             tokenizer = BPETokenizer.from_pretrained("cl100k_base")
         else:
-            tokenizer = get_tokenizer()
+            print(f"Loading tokenizer from {args.custom_tokenizer_model}...")
+            tokenizer = BPETokenizer.from_directory(args.custom_tokenizer_model)
 
         vocab_sizes[tokenizer_name] = tokenizer.get_vocab_size()
         tokenizer_results[tokenizer_name] = {}

@@ -5,8 +5,6 @@ from functools import lru_cache
 import pickle
 import rustbpe
 import tiktoken
-import torch
-from jamgpt.common import get_base_dir
 
 SPECIAL_TOKENS = [
     # every document begins with the Beginning of Sequence (BOS) token that delimits documents
@@ -236,23 +234,3 @@ class BPETokenizer:
         assistant_start = self.encode_special("<|assistant_start|>")
         ids.append(assistant_start)
         return ids
-
-
-def get_tokenizer():
-
-    base_dir = get_base_dir()
-    tokenizer_dir = os.path.join(base_dir, "tokenizer")
-    print(f"Loading tokenizer from {tokenizer_dir}...")
-    return BPETokenizer.from_directory(tokenizer_dir)
-
-
-def get_token_bytes(device="cpu"):
-    base_dir = get_base_dir()
-    tokenizer_dir = os.path.join(base_dir, "tokenizer")
-    token_bytes_path = os.path.join(tokenizer_dir, "token_bytes.pt")
-    assert os.path.exists(
-        token_bytes_path
-    ), f"Token bytes not found at {token_bytes_path}? It gets written by tok_train.py"
-    with open(token_bytes_path, "rb") as f:
-        token_bytes = torch.load(f, map_location=device)
-    return token_bytes

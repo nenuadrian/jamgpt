@@ -6,7 +6,6 @@ from functools import partial
 
 from torch import nn
 from jamgpt.common import get_dist_info
-
 from jamgpt.optimizers import Muon, DistMuon, DistAdamW, Muon
 
 
@@ -175,6 +174,18 @@ class GPT(nn.Module):
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=1)
+
+    def estimate_flops(self):
+        """Return the estimated FLOPs per token for the model. Ref: https://arxiv.org/abs/2204.02311"""
+        nparams = sum(p.numel() for p in self.parameters())
+        nparams_embedding = self.transformer.wte.weight.numel()
+        l, h, q, t = (
+            self.config.n_layer,
+            self.config.n_head,
+            self.config.n_embd // self.config.n_head,
+            self.config.sequence_len,
+        )
+        return 6 * (nparams - nparams_embedding) + 12 * l * h * q * t
 
     def _precompute_rotary_embeddings(self, seq_len, head_dim, base=10000):
         if device is None:

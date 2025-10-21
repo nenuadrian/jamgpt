@@ -16,5 +16,5 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
 maturin develop --release --manifest-path jamgpt/tokenizer/Cargo.toml
 
-python -m scripts.train_tokenizer --max_chars=2000000000
+python -m scripts.train_tokenizer --max_chars=2000000000 --output_dir="./output/tokenizer"
 ```
