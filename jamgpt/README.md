@@ -1,10 +1,17 @@
-# nanochat
+# jamchat
 
-![nanochat logo](dev/jamgptpng)
 
-> The best ChatGPT that $100 can buy.
+## env
 
-This repo is a full-stack implementation of an LLM like ChatGPT in a single, clean, minimal, hackable, dependency-lite codebase. nanochat is designed to run on a single 8XH100 node via scripts like [speedrun.sh](speedrun.sh), that run the entire pipeline start to end. This includes tokenization, pretraining, finetuning, evaluation, inference, and web serving over a simple UI so that you can talk to your own LLM just like ChatGPT. nanochat will become the capstone project of the course LLM101n being developed by Eureka Labs.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install torch tokenizers pyarrow pytest
+
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+```
 
 ## Talk to it
 
@@ -48,15 +55,15 @@ You can also `cat report.md` file which appeared in the project directory and co
 - Tokens (approx): 83,497
 - Dependencies (uv.lock lines): 2,004
 
-| Metric          | BASE     | MID      | SFT      | RL       |
-|-----------------|----------|----------|----------|----------|
-| CORE            | 0.2219   | -        | -        | -        |
-| ARC-Challenge   | -        | 0.2875   | 0.2807   | -        |
-| ARC-Easy        | -        | 0.3561   | 0.3876   | -        |
-| GSM8K           | -        | 0.0250   | 0.0455   | 0.0758   |
-| HumanEval       | -        | 0.0671   | 0.0854   | -        |
-| MMLU            | -        | 0.3111   | 0.3151   | -        |
-| ChatCORE        | -        | 0.0730   | 0.0884   | -        |
+| Metric        | BASE   | MID    | SFT    | RL     |
+| ------------- | ------ | ------ | ------ | ------ |
+| CORE          | 0.2219 | -      | -      | -      |
+| ARC-Challenge | -      | 0.2875 | 0.2807 | -      |
+| ARC-Easy      | -      | 0.3561 | 0.3876 | -      |
+| GSM8K         | -      | 0.0250 | 0.0455 | 0.0758 |
+| HumanEval     | -      | 0.0671 | 0.0854 | -      |
+| MMLU          | -      | 0.3111 | 0.3151 | -      |
+| ChatCORE      | -      | 0.0730 | 0.0884 | -      |
 
 Total wall clock time: 3h51m
 
@@ -115,36 +122,8 @@ Alternatively, I recommend using [DeepWiki](https://deepwiki.com/) from Devin/Co
 
 ## Tests
 
-I haven't invested too much here but some tests exist, especially for the tokenizer. Run e.g. as:
-
 ```bash
-python -m pytest tests/test_rustbpe.py -v -s
-```
-
-## Contributing
-
-nanochat is nowhere finished. The goal is to improve the state of the art in micro models that are accessible to work with end to end on budgets of < $1000 dollars. Accessibility is about overall cost but also about cognitive complexity - nanochat is not an exhaustively configurable LLM "framework"; there will be no giant configuration objects, model factories, or if-then-else monsters in the code base. It is a single, cohesive, minimal, readable, hackable, maximally-forkable "strong baseline" codebase designed to run start to end and produce a concrete ChatGPT clone and its report card.
-
-## Acknowledgements
-
-- The name (nanochat) derives from my earlier project [nanoGPT](https://github.com/karpathy/nanoGPT), which only covered pretraining.
-- nanochat is also inspired by [modded-nanoGPT](https://github.com/KellerJordan/modded-nanogpt), which gamified the nanoGPT repo with clear metrics and a leaderboard, and borrows a lot of its ideas and some implementation for pretraining.
-- Thank you to [HuggingFace](https://huggingface.co/) for fineweb and smoltalk.
-- Thank you [Lambda](https://lambda.ai/service/gpu-cloud) for the compute used in developing this project.
-- Thank you to chief LLM whisperer 🧙‍♂️ Alec Radford for advice/guidance.
-
-## Cite
-
-If you find nanochat helpful in your research cite simply as:
-
-```bibtex
-@misc{nanochat,
-  author = {Andrej Karpathy},
-  title = {nanochat: The best ChatGPT that $100 can buy},
-  year = {2025},
-  publisher = {GitHub},
-  url = {https://github.com/karpathy/nanochat}
-}
+python -m pytest . -v -s
 ```
 
 ## License

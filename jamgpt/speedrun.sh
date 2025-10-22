@@ -10,22 +10,8 @@
 # 3) Example launch with wandb logging, but see below for setting up wandb first:
 # WANDB_RUN=speedrun screen -L -Logfile speedrun.log -S speedrun bash speedrun.sh
 
-# Default intermediate artifacts directory is in ~/.cache/nanochat
 export OMP_NUM_THREADS=1
-export NANOCHAT_BASE_DIR="$HOME/.cache/nanochat"
-mkdir -p $NANOCHAT_BASE_DIR
 
-# -----------------------------------------------------------------------------
-# Python venv setup with uv
-
-# install uv (if not already installed)
-command -v uv &> /dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
-# create a .venv local virtual environment (if it doesn't exist)
-[ -d ".venv" ] || uv venv
-# install the repo dependencies
-uv sync
-# activate venv so that `python` uses the project's venv instead of system python
-source .venv/bin/activate
 
 # -----------------------------------------------------------------------------
 # wandb setup
@@ -39,24 +25,15 @@ if [ -z "$WANDB_RUN" ]; then
     WANDB_RUN=dummy
 fi
 
-# -----------------------------------------------------------------------------
-# During the course of the run, we will be writing markdown reports to the report/
-# directory in the base dir. This command clears it out and writes a header section
-# with a bunch of system info and a timestamp that marks the start of the run.
-python -m jamgptreport reset
 
 # -----------------------------------------------------------------------------
 # Tokenizer
-
-# Install Rust / Cargo
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source "$HOME/.cargo/env"
 
 # Build the rustbpe Tokenizer
 uv run maturin develop --release --manifest-path rustbpe/Cargo.toml
 
 # train the tokenizer with vocab size 2**16 = 65536 on ~2B characters of data
-python -m scripts.tok_train --max_chars=2000000000
+python -m scripts.tok_train --max_chars=2000000000 --dataset_path /Volumes/Data/tokenizer_data --output_dir model/tokenizer
 # evaluate the tokenizer (report compression ratio etc.)
 python -m scripts.tok_eval
 

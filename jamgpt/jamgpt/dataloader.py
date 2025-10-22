@@ -2,18 +2,15 @@ from collections import deque
 
 import torch
 
-from jamgptcommon import get_dist_info
-from jamgpttokenizer import get_tokenizer
+from jamgpt.common import get_dist_info
+from jamgpt.tokenizer import get_tokenizer
 
 
 import os
-import argparse
 import time
 import requests
 import pyarrow.parquet as pq
-from multiprocessing import Pool
 
-from jamgptcommon import get_base_dir
 
 # -----------------------------------------------------------------------------
 # The specifics of the current pretraining dataset
@@ -26,36 +23,32 @@ MAX_SHARD = 1822  # the last datashard is shard_01822.parquet
 index_to_filename = (
     lambda index: f"shard_{index:05d}.parquet"
 )  # format of the filenames
-base_dir = get_base_dir()
-DATA_DIR = os.path.join(base_dir, "base_data")
-os.makedirs(DATA_DIR, exist_ok=True)
 
 # -----------------------------------------------------------------------------
 # These functions are useful utilities to other modules, can/should be imported
 
 
-def list_parquet_files(data_dir=None):
+def list_parquet_files(dataset_path=None):
     """Looks into a data dir and returns full paths to all parquet files."""
-    data_dir = DATA_DIR if data_dir is None else data_dir
     parquet_files = sorted(
         [
             f
-            for f in os.listdir(data_dir)
+            for f in os.listdir(dataset_path)
             if f.endswith(".parquet") and not f.endswith(".tmp")
         ]
     )
-    parquet_paths = [os.path.join(data_dir, f) for f in parquet_files]
+    parquet_paths = [os.path.join(dataset_path, f) for f in parquet_files]
     return parquet_paths
 
 
-def parquets_iter_batched(split, start=0, step=1):
+def parquets_iter_batched(split, dataset_path: str, start=0, step=1):
     """
     Iterate through the dataset, in batches of underlying row_groups for efficiency.
     - split can be "train" or "val". the last parquet file will be val.
     - start/step are useful for skipping rows in DDP. e.g. start=rank, step=world_size
     """
     assert split in ["train", "val"], "split must be 'train' or 'val'"
-    parquet_paths = list_parquet_files()
+    parquet_paths = list_parquet_files(dataset_path=dataset_path)
     parquet_paths = parquet_paths[:-1] if split == "train" else parquet_paths[-1:]
     for filepath in parquet_paths:
         pf = pq.ParquetFile(filepath)
