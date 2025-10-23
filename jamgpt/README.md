@@ -7,17 +7,20 @@
 python3 -m venv .venv
 source .venv/bin/activate
 
-pip install torch tokenizers pyarrow pytest tiktoken maturin
+pip install torch tokenizers pyarrow pytest tiktoken maturin jinja2 wandb
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
 ```
 
-## Tokenize
+## Tokenizer
 ```
 maturin develop --release --manifest-path rustbpe/Cargo.toml
 
 python -m scripts.tok_train --max_chars=2000000000 --dataset_path /Volumes/StorageT4/data/fineweb-edu-parquet-shards/sample-100BT/ --output_dir model/tokenizer
+
+
+
 ```
 
 ## Talk to it

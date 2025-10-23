@@ -8,6 +8,7 @@ Two implementations are available:
 
 import os
 import copy
+import torch
 from functools import lru_cache
 
 SPECIAL_TOKENS = [
@@ -416,11 +417,6 @@ class RustBPETokenizer:
         assistant_start = self.encode_special("<|assistant_start|>")
         ids.append(assistant_start)
         return ids
-
-
-def get_tokenizer(tokenizer_dir):
-    # return HuggingFaceTokenizer.from_directory(tokenizer_dir)
-    return RustBPETokenizer.from_directory(tokenizer_dir)
 
 
 def get_token_bytes(tokenizer_dir, device="cpu"):

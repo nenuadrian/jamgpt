@@ -1,15 +1,13 @@
 from collections import deque
 
-import torch
-
-from jamgpt.common import get_dist_info
-from jamgpt.tokenizer import get_tokenizer
-
-
 import os
 import time
 import requests
 import pyarrow.parquet as pq
+import torch
+
+from jamgpt.common import get_dist_info
+from jamgpt.tokenizer import RustBPETokenizer
 
 
 # -----------------------------------------------------------------------------
@@ -115,14 +113,22 @@ def download_single_file(index):
 
 
 def tokenizing_distributed_data_loader(
-    B, T, split, tokenizer_threads=4, tokenizer_batch_size=128, device="cuda"
+    tokenizer_dir,
+    B,
+    T,
+    split,
+    dataset_path,
+    tokenizer_threads=4,
+    tokenizer_batch_size=128,
+    device="cuda",
 ):
     """Stream pretraining text from parquet files, tokenize, yield training batches."""
     assert split in ["train", "val"], "split must be 'train' or 'val'"
-    ddp, ddp_rank, ddp_local_rank, ddp_world_size = get_dist_info()
+    _, ddp_rank, _, ddp_world_size = get_dist_info()
     needed_tokens = B * T + 1  # +1 is because we also need the target at the last token
     # get the tokenizer and the bos token
-    tokenizer = get_tokenizer()
+    tokenizer = RustBPETokenizer.from_directory(tokenizer_dir)
+
     bos_token = tokenizer.get_bos_token_id()
     # scratch buffer holds the tokens for one iteration
     token_buffer = deque()  # we stream tokens on the right and pop from the left
@@ -132,7 +138,7 @@ def tokenizing_distributed_data_loader(
         while True:
             # batch will iterate in group size of the parquet files, usually e.g. 1024 rows
             for batch in parquets_iter_batched(
-                split=split, start=ddp_rank, step=ddp_world_size
+                dataset_path=dataset_path,split=split, start=ddp_rank, step=ddp_world_size
             ):
                 # for the tokenizer we might want to go in usually smaller batches, e.g. 128 rows
                 for i in range(0, len(batch), tokenizer_batch_size):
