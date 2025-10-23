@@ -30,10 +30,10 @@ fi
 # Tokenizer
 
 # Build the rustbpe Tokenizer
-uv run maturin develop --release --manifest-path rustbpe/Cargo.toml
+maturin develop --release --manifest-path rustbpe/Cargo.toml
 
 # train the tokenizer with vocab size 2**16 = 65536 on ~2B characters of data
-python -m scripts.tok_train --max_chars=2000000000 --dataset_path /Volumes/Data/tokenizer_data --output_dir model/tokenizer
+python -m scripts.tok_train --max_chars=2000000000 --dataset_path /Volumes/StorageT4/data/fineweb-edu-parquet-shards/sample-100BT/ --output_dir model/tokenizer
 # evaluate the tokenizer (report compression ratio etc.)
 python -m scripts.tok_eval
 

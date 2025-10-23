@@ -34,7 +34,7 @@ def list_parquet_files(dataset_path=None):
         [
             f
             for f in os.listdir(dataset_path)
-            if f.endswith(".parquet") and not f.endswith(".tmp")
+            if f.endswith(".parquet") and not f.startswith(".")
         ]
     )
     parquet_paths = [os.path.join(dataset_path, f) for f in parquet_files]
@@ -51,6 +51,7 @@ def parquets_iter_batched(split, dataset_path: str, start=0, step=1):
     parquet_paths = list_parquet_files(dataset_path=dataset_path)
     parquet_paths = parquet_paths[:-1] if split == "train" else parquet_paths[-1:]
     for filepath in parquet_paths:
+        print(filepath)
         pf = pq.ParquetFile(filepath)
         for rg_idx in range(start, pf.num_row_groups, step):
             rg = pf.read_row_group(rg_idx)

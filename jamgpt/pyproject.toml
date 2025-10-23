@@ -3,7 +3,6 @@ name = "jamgpt"
 version = "0.1.0"
 description = "jamgpt"
 readme = "README.md"
-requires-python = ">=3.10"
 dependencies = [
     "datasets>=4.0.0",
     "fastapi>=0.117.1",
