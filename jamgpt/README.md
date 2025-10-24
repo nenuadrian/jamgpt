@@ -7,7 +7,7 @@
 python3 -m venv .venv
 source .venv/bin/activate
 
-pip install torch tokenizers pyarrow pytest tiktoken maturin jinja2 wandb
+pip install torch tokenizers pyarrow pytest tiktoken maturin jinja2 wandb tdqm
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"

@@ -17,6 +17,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import time
 import argparse
 from contextlib import nullcontext
+from tqdm import tqdm
 
 import wandb
 import torch
@@ -357,7 +358,9 @@ smooth_train_loss = 0  # EMA of training loss
 ema_beta = 0.9  # EMA decay factor
 total_training_time = 0  # total wall-clock time of training
 # note that we run +1 steps only so that we can eval and save at the end
-for step in range(num_iterations + 1):
+for step in tqdm(
+    range(num_iterations + 1), desc="Training", disable=not master_process
+):
     last_step = step == num_iterations
     flops_so_far = num_flops_per_token * total_batch_size * step
 
