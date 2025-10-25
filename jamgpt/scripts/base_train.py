@@ -19,7 +19,7 @@ import argparse
 from contextlib import nullcontext
 from tqdm import tqdm
 
-import wandb
+# import wandb
 import torch
 
 from jamgpt.gpt import GPT, GPTConfig
@@ -28,7 +28,7 @@ from jamgpt.common import (
     compute_init,
     compute_cleanup,
     print0,
-    DummyWandb,
+    # DummyWandb,
     autodetect_device_type,
 )
 from jamgpt.tokenizer import RustBPETokenizer, get_token_bytes
@@ -39,13 +39,6 @@ from scripts.base_eval import evaluate_model
 
 
 parser = argparse.ArgumentParser(description="Train GPT model")
-# User settings
-parser.add_argument(
-    "--run",
-    type=str,
-    default="dummy",
-    help='wandb run name (use "dummy" to disable wandb)',
-)
 parser.add_argument(
     "--tokenizer_dir",
     type=str,
@@ -168,7 +161,6 @@ for arg, value in vars(args).items():
 print()
 
 # Map args to original variable names for compatibility
-run = args.run
 device_type = args.device_type
 depth = args.depth
 max_seq_len = args.max_seq_len
@@ -205,12 +197,12 @@ synchronize = torch.cuda.synchronize if device_type == "cuda" else lambda: None
 get_max_memory = torch.cuda.max_memory_allocated if device_type == "cuda" else lambda: 0
 
 # wandb logging init
-use_dummy_wandb = run == "dummy" or not master_process
-wandb_run = (
-    DummyWandb()
-    if use_dummy_wandb
-    else wandb.init(project="nanochat", name=run, config=user_config)
-)
+# use_dummy_wandb = run == "dummy" or not master_process
+# wandb_run = (
+#     DummyWandb()
+#     if use_dummy_wandb
+#     else wandb.init(project="nanochat", name=run, config=user_config)
+# )
 
 # Tokenizer will be useful for evaluation, also we need the vocab size
 tokenizer = RustBPETokenizer.from_directory(args.tokenizer_dir)
@@ -315,6 +307,7 @@ train_loader = tokenizing_distributed_data_loader(
     device=device,
     dataset_path=args.dataset_path,
 )
+
 build_val_loader = lambda: tokenizing_distributed_data_loader(
     args.tokenizer_dir,
     device_batch_size,
@@ -323,6 +316,7 @@ build_val_loader = lambda: tokenizing_distributed_data_loader(
     device=device,
     dataset_path=args.dataset_path,
 )
+
 x, y = next(train_loader)  # kick off load of the very first batch of data
 
 # -----------------------------------------------------------------------------
@@ -374,14 +368,14 @@ for step in tqdm(
         print0(f"Step {step:05d} | Validation bpb: {val_bpb:.4f}")
         if val_bpb < min_val_bpb:
             min_val_bpb = val_bpb
-        wandb_run.log(
-            {
-                "step": step,
-                "total_training_flops": flops_so_far,
-                "total_training_time": total_training_time,
-                "val/bpb": val_bpb,
-            }
-        )
+        # wandb_run.log(
+        #     {
+        #         "step": step,
+        #         "total_training_flops": flops_so_far,
+        #         "total_training_time": total_training_time,
+        #         "val/bpb": val_bpb,
+        #     }
+        # )
         model.train()
 
     # once in a while: estimate the CORE metric (all ranks participate)
@@ -396,14 +390,14 @@ for step in tqdm(
                 orig_model, tokenizer, device, max_per_task=core_metric_max_per_task
             )
         print0(f"Step {step:05d} | CORE metric: {results['core_metric']:.4f}")
-        wandb_run.log(
-            {
-                "step": step,
-                "total_training_flops": flops_so_far,
-                "core_metric": results["core_metric"],
-                "centered_results": results["centered_results"],
-            }
-        )
+        # wandb_run.log(
+        #     {
+        #         "step": step,
+        #         "total_training_flops": flops_so_far,
+        #         "core_metric": results["core_metric"],
+        #         "centered_results": results["centered_results"],
+        #     }
+        # )
         model.train()
 
     # once in a while: sample from the model (only on master process)
@@ -505,24 +499,24 @@ for step in tqdm(
     print0(
         f"step {step:05d}/{num_iterations:05d} ({pct_done:.2f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt * 1000:.2f}ms | tok/sec: {tok_per_sec:,} | mfu: {mfu:.2f} | total time: {total_training_time/60:.2f}m"
     )
-    if step % 100 == 0:
-        wandb_run.log(
-            {
-                "step": step,
-                "total_training_flops": flops_so_far,
-                "total_training_time": total_training_time,
-                "train/loss": debiased_smooth_loss,
-                "train/lrm": lrm,
-                "train/dt": dt,
-                "train/tok_per_sec": tok_per_sec,
-                "train/mfu": mfu,
-            }
-        )
+    # if step % 100 == 0:
+    #     wandb_run.log(
+    #         {
+    #             "step": step,
+    #             "total_training_flops": flops_so_far,
+    #             "total_training_time": total_training_time,
+    #             "train/loss": debiased_smooth_loss,
+    #             "train/lrm": lrm,
+    #             "train/dt": dt,
+    #             "train/tok_per_sec": tok_per_sec,
+    #             "train/mfu": mfu,
+    #         }
+    #     )
 
 print0(f"Peak memory usage: {get_max_memory() / 1024 / 1024:.2f}MiB")
 print0(f"Total training time: {total_training_time/60:.2f}m")
 print0(f"Minimum validation bpb: {min_val_bpb:.4f}")
 
 
-wandb_run.finish()  # wandb run finish
+# wandb_run.finish()  # wandb run finish
 compute_cleanup()

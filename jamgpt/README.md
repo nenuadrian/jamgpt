@@ -7,10 +7,16 @@
 python3 -m venv .venv
 source .venv/bin/activate
 
-pip install torch tokenizers pyarrow pytest tiktoken maturin jinja2 wandb tdqm
+pip install torch tokenizers pyarrow pytest tiktoken maturin jinja2 wandb tdqm numpy pandas
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
+```
+
+## Data download (large)
+
+```bash
+python -m scripts.download_data --output_dir ""
 ```
 
 ## Tokenizer
@@ -19,8 +25,15 @@ maturin develop --release --manifest-path rustbpe/Cargo.toml
 
 python -m scripts.tok_train --max_chars=2000000000 --dataset_path /Volumes/StorageT4/data/fineweb-edu-parquet-shards/sample-100BT/ --output_dir model/tokenizer
 
+python -m scripts.tok_train --max_chars=2000000000 --dataset_path ~/scratch/fineweb-edu-parquet-shards/ --output_dir model/tokenizer
+```
 
+## Pretrain 
 
+```bash 
+python -m scripts.base_train --depth=4 --device_batch_size=1 --checkpoints_path=model/checkpoints --tokenizer_dir=model/tokenizer --dataset_path=/Volumes/StorageT4/data/fineweb-edu-parquet-shards/sample-100BT
+
+python -m scripts.base_train --depth=20 --checkpoints_path=model/checkpoints --tokenizer_dir=model/tokenizer --dataset_path=~/scratch/fineweb-edu-parquet-shards/
 ```
 
 ## Talk to it

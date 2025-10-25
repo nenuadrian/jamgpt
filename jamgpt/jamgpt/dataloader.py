@@ -127,8 +127,9 @@ def tokenizing_distributed_data_loader(
     _, ddp_rank, _, ddp_world_size = get_dist_info()
     needed_tokens = B * T + 1  # +1 is because we also need the target at the last token
     # get the tokenizer and the bos token
+    print(f"Loading tokenizer from {tokenizer_dir}...")
     tokenizer = RustBPETokenizer.from_directory(tokenizer_dir)
-
+    print(f"Tokenizer loaded successfully.")
     bos_token = tokenizer.get_bos_token_id()
     # scratch buffer holds the tokens for one iteration
     token_buffer = deque()  # we stream tokens on the right and pop from the left
@@ -138,7 +139,10 @@ def tokenizing_distributed_data_loader(
         while True:
             # batch will iterate in group size of the parquet files, usually e.g. 1024 rows
             for batch in parquets_iter_batched(
-                dataset_path=dataset_path,split=split, start=ddp_rank, step=ddp_world_size
+                dataset_path=dataset_path,
+                split=split,
+                start=ddp_rank,
+                step=ddp_world_size,
             ):
                 # for the tokenizer we might want to go in usually smaller batches, e.g. 128 rows
                 for i in range(0, len(batch), tokenizer_batch_size):
@@ -159,7 +163,7 @@ def tokenizing_distributed_data_loader(
             batch_index += 1
         # Move tokens from the deque into the scratch buffer
         tokens = [token_buffer.popleft() for _ in range(needed_tokens)]
-        scratch = torch.tensor(tokens, dtype=torch.int64, pin_memory=True)
+        scratch = torch.tensor(tokens, dtype=torch.int64)
         # Create the inputs/targets as 1D tensors
         inputs_cpu = scratch[:-1].to(dtype=torch.int32)
         targets_cpu = scratch[1:]

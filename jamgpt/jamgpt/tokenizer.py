@@ -238,7 +238,6 @@ class RustBPETokenizer:
 
     def encode(self, text, prepend=None, append=None, num_threads=8):
         # text can be either a string or a list of strings
-
         if prepend is not None:
             prepend_id = (
                 prepend if isinstance(prepend, int) else self.encode_special(prepend)
