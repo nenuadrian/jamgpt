@@ -1,6 +1,9 @@
 
 
 ```bash
+pip install transformers tqdm datasets tokenizers torch matplotlib numpy pandas
+```
+
 python train_tokenizer.py --dataset_path /Volumes/StorageT4/data/fineweb-edu-parquet-shards/sample-100BT --vocab_size 50257
 
 python test_tokenizer.py --custom_tokenizer_path ./tokenizer_output/tokenizer.json

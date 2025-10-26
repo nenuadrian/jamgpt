@@ -43,6 +43,18 @@ def parse_args():
     parser.add_argument(
         "--seed", type=int, default=42, help="Random seed for shuffling"
     )
+    parser.add_argument(
+        "--max_docs",
+        type=int,
+        default=None,
+        help="Maximum number of documents to download (None for all)",
+    )
+    parser.add_argument(
+        "--max_shards",
+        type=int,
+        default=None,
+        help="Maximum number of shards to create (None for all)",
+    )
     return parser.parse_args()
 
 
@@ -73,6 +85,13 @@ if __name__ == "__main__":
 
     ds = ds.shuffle(seed=args.seed)
     ndocs = len(ds)
+
+    # Limit number of documents if specified
+    if args.max_docs is not None:
+        ndocs = min(ndocs, args.max_docs)
+        ds = ds.select(range(ndocs))
+        print(f"Limited to {ndocs} documents")
+
     print(f"Number of documents: {ndocs}")
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -85,6 +104,11 @@ if __name__ == "__main__":
     time_start = time.time()
 
     for doc in ds:
+        # Check if we've reached max shards limit
+        if args.max_shards is not None and shard_index >= args.max_shards:
+            print(f"Reached maximum number of shards ({args.max_shards}), stopping...")
+            break
+
         shard_docs.append(doc)
         shard_chars += len(doc["text"])
         docs_processed += 1
@@ -113,9 +137,28 @@ if __name__ == "__main__":
             print(
                 f"Processed {docs_processed}/{ndocs} documents "
                 f"({docs_processed/ndocs*100:.2f}%), "
+                f"created {shard_index} shard(s), "
                 f"time spent: {time_spent:.2f} seconds, "
                 f"estimated remaining time: {remaining_time:.2f} seconds"
             )
+
+    # Save any remaining documents as final shard
+    if shard_docs and (args.max_shards is None or shard_index < args.max_shards):
+        table = pa.Table.from_pydict({"text": shard_docs})
+        pq.write_table(
+            table,
+            os.path.join(args.output_dir, f"shard_{shard_index:05d}.parquet"),
+            row_group_size=row_group_size,
+            use_dictionary=False,
+            compression="zstd",
+            compression_level=3,
+            write_statistics=False,
+        )
+        print(f"Saved final shard with {len(shard_docs)} documents")
+
+    print(
+        f"\nTotal: Created {shard_index + 1 if shard_docs else shard_index} shard(s) from {docs_processed} documents"
+    )
 
     # Clean up default HuggingFace cache if requested
     if os.path.exists(cache_dir):
