@@ -10,6 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 from tokenizers import Tokenizer
 from tqdm import tqdm
 import json
+from torch.utils.tensorboard import SummaryWriter
 
 
 def parse_args():
@@ -114,6 +115,12 @@ def parse_args():
         "--compile",
         action="store_true",
         help="Use torch.compile for faster training (requires PyTorch 2.0+)",
+    )
+    parser.add_argument(
+        "--log_dir",
+        type=str,
+        default="./logs",
+        help="Directory for TensorBoard logs",
     )
     return parser.parse_args()
 
@@ -414,7 +421,17 @@ def train(args):
         model = torch.compile(model)
 
     print(model)
-    
+
+    # Create TensorBoard writer
+    log_dir = os.path.join(args.log_dir, f"gpt_{args.output_dir.split('/')[-1]}")
+    writer = SummaryWriter(log_dir=log_dir)
+    print(f"TensorBoard logs will be saved to {log_dir}")
+    print(f"Run: tensorboard --logdir {args.log_dir}")
+
+    # Log hyperparameters
+    writer.add_text("hyperparameters", json.dumps(vars(args), indent=2), 0)
+    writer.add_text("model_config", json.dumps(config.__dict__, indent=2), 0)
+
     # Create datasets
     print("Creating datasets...")
     train_dataset = TextDataset(
@@ -445,6 +462,8 @@ def train(args):
     iter_num = 0
     best_eval_loss = float("inf")
     train_loader_iter = iter(train_loader)
+    running_loss = 0.0
+    log_interval = 10  # Log every 10 iterations
 
     while iter_num < args.max_iters:
         # Get batch
@@ -464,6 +483,11 @@ def train(args):
             print(
                 f"Step {iter_num}: train loss {losses['train']:.4f}, eval loss {losses['eval']:.4f}"
             )
+
+            # Log to TensorBoard
+            writer.add_scalar("Loss/train", losses["train"], iter_num)
+            writer.add_scalar("Loss/eval", losses["eval"], iter_num)
+            writer.add_scalar("Loss/best_eval", best_eval_loss, iter_num)
 
             # Save best model
             if losses["eval"] < best_eval_loss:
@@ -492,9 +516,25 @@ def train(args):
 
         # Forward and backward
         _, loss = model(x, y)
+        running_loss += loss.item()
+
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
+
+        # Log gradients
+        if iter_num % (args.eval_interval // 2) == 0:
+            for name, param in model.named_parameters():
+                if param.grad is not None:
+                    writer.add_histogram(f"gradients/{name}", param.grad, iter_num)
+                    writer.add_histogram(f"parameters/{name}", param, iter_num)
+
         optimizer.step()
+
+        # Log running loss
+        if iter_num % log_interval == 0 and iter_num > 0:
+            avg_loss = running_loss / log_interval
+            writer.add_scalar("Loss/train_running", avg_loss, iter_num)
+            running_loss = 0.0
 
         iter_num += 1
 
@@ -520,6 +560,13 @@ def train(args):
     generated = model.generate(context, max_new_tokens=100, temperature=0.8, top_k=200)
     generated_text = tokenizer.decode(generated[0].tolist())
     print(f"Generated: {generated_text}")
+
+    # Log sample generation
+    writer.add_text("generated_sample", generated_text, iter_num)
+
+    # Close writer
+    writer.close()
+    print(f"TensorBoard logs saved to {log_dir}")
 
 
 if __name__ == "__main__":

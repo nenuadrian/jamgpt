@@ -7,6 +7,7 @@ from torch.utils.data import Dataset, DataLoader
 from tokenizers import Tokenizer
 from tqdm import tqdm
 from train_gpt import GPT, GPTConfig
+from torch.utils.tensorboard import SummaryWriter
 
 
 def parse_args():
@@ -88,6 +89,12 @@ def parse_args():
         type=int,
         default=1,
         help="Number of steps to accumulate gradients",
+    )
+    parser.add_argument(
+        "--log_dir",
+        type=str,
+        default="./logs",
+        help="Directory for TensorBoard logs",
     )
     return parser.parse_args()
 
@@ -253,6 +260,17 @@ def train(args):
         print(f"Using model's block_size: {config.block_size}")
         args.block_size = config.block_size
 
+    # Create TensorBoard writer
+    log_dir = os.path.join(args.log_dir, f"chat_{args.output_dir.split('/')[-1]}")
+    writer = SummaryWriter(log_dir=log_dir)
+    print(f"TensorBoard logs will be saved to {log_dir}")
+    print(f"Run: tensorboard --logdir {args.log_dir}")
+
+    # Log hyperparameters
+    writer.add_text("hyperparameters", json.dumps(vars(args), indent=2), 0)
+    writer.add_text("model_config", json.dumps(config.__dict__, indent=2), 0)
+    writer.add_text("system_prompt", args.system_prompt, 0)
+
     # Create dataset
     print("Loading chat dataset...")
     dataset = ChatDataset(
@@ -277,6 +295,10 @@ def train(args):
 
     print(f"Train size: {len(train_dataset)}, Eval size: {len(eval_dataset)}")
 
+    # Log dataset info
+    writer.add_scalar("Dataset/train_size", len(train_dataset), 0)
+    writer.add_scalar("Dataset/eval_size", len(eval_dataset), 0)
+
     # Create dataloaders
     train_loader = DataLoader(
         train_dataset,
@@ -296,6 +318,9 @@ def train(args):
     # Create optimizer with lower learning rate for finetuning
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
 
+    # Log learning rate
+    writer.add_scalar("Hyperparameters/learning_rate", args.learning_rate, 0)
+
     # Training loop
     print("Starting finetuning...")
     os.makedirs(args.output_dir, exist_ok=True)
@@ -305,6 +330,8 @@ def train(args):
     best_eval_loss = float("inf")
     train_loader_iter = iter(train_loader)
     accumulated_loss = 0.0
+    running_loss = 0.0
+    log_interval = 10
 
     progress_bar = tqdm(total=args.max_iters, desc="Training")
 
@@ -322,25 +349,49 @@ def train(args):
         _, loss = model(x, y)
         loss = loss / args.gradient_accumulation_steps
         accumulated_loss += loss.item()
+        running_loss += loss.item() * args.gradient_accumulation_steps
 
         # Backward pass
         loss.backward()
 
         # Update weights after gradient accumulation
         if (iter_num + 1) % args.gradient_accumulation_steps == 0:
+            # Log gradient norms
+            total_norm = 0.0
+            for p in model.parameters():
+                if p.grad is not None:
+                    param_norm = p.grad.data.norm(2)
+                    total_norm += param_norm.item() ** 2
+            total_norm = total_norm**0.5
+            writer.add_scalar("Gradients/norm", total_norm, iter_num)
+
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
 
             progress_bar.set_postfix({"loss": accumulated_loss})
+
+            # Log training loss
+            writer.add_scalar("Loss/train_step", accumulated_loss, iter_num)
             accumulated_loss = 0.0
+
+        # Log running loss
+        if iter_num % log_interval == 0 and iter_num > 0:
+            avg_loss = running_loss / log_interval
+            writer.add_scalar("Loss/train_running", avg_loss, iter_num)
+            running_loss = 0.0
 
         # Evaluate periodically
         if iter_num % args.eval_interval == 0:
             eval_loss = evaluate(model, eval_loader, args.device)
             print(f"\nStep {iter_num}: eval loss {eval_loss:.4f}")
 
+            # Log to TensorBoard
+            writer.add_scalar("Loss/eval", eval_loss, iter_num)
+            writer.add_scalar("Loss/best_eval", best_eval_loss, iter_num)
+
             # Save best model
             if eval_loss < best_eval_loss:
+                improvement = best_eval_loss - eval_loss
                 best_eval_loss = eval_loss
                 checkpoint = {
                     "model": model.state_dict(),
@@ -352,7 +403,10 @@ def train(args):
                 torch.save(
                     checkpoint, os.path.join(args.output_dir, "best_chat_model.pt")
                 )
-                print(f"Saved best model with eval loss {best_eval_loss:.4f}")
+                print(
+                    f"Saved best model with eval loss {best_eval_loss:.4f} (improved by {improvement:.4f})"
+                )
+                writer.add_scalar("Loss/improvement", improvement, iter_num)
 
         # Save checkpoint periodically
         if iter_num % args.save_interval == 0 and iter_num > 0:
@@ -397,7 +451,16 @@ def train(args):
 
     # Test generation
     print("\nTesting chat generation...")
-    test_chat(model, tokenizer, args.device, args.system_prompt)
+    test_responses = test_chat(model, tokenizer, args.device, args.system_prompt)
+
+    # Log test responses to TensorBoard
+    for i, (prompt, response) in enumerate(test_responses):
+        writer.add_text(f"test_generation/prompt_{i}", prompt, iter_num)
+        writer.add_text(f"test_generation/response_{i}", response, iter_num)
+
+    # Close writer
+    writer.close()
+    print(f"TensorBoard logs saved to {log_dir}")
 
 
 def test_chat(model, tokenizer, device, system_prompt):
@@ -409,6 +472,8 @@ def test_chat(model, tokenizer, device, system_prompt):
         "Explain quantum computing in simple terms.",
         "Write a haiku about coding.",
     ]
+
+    responses = []
 
     for prompt in test_prompts:
         print(f"\n{'='*60}")
@@ -441,7 +506,12 @@ def test_chat(model, tokenizer, device, system_prompt):
             )
             print(f"Assistant: {response}")
         else:
+            response = output_text
             print(f"Generated: {output_text}")
+
+        responses.append((prompt, response))
+
+    return responses
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 
 
 ```bash
-pip install transformers tqdm datasets tokenizers torch matplotlib numpy pandas
+pip install transformers tqdm datasets tokenizers torch matplotlib numpy pandas gradio tensorboard
 ```
 
 python train_tokenizer.py --dataset_path /Volumes/StorageT4/data/fineweb-edu-parquet-shards/sample-100BT --vocab_size 50257
