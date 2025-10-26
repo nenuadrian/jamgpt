@@ -106,12 +106,6 @@ def parse_args():
         help="Save checkpoint interval",
     )
     parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda" if torch.cuda.is_available() else "cpu",
-        help="Device to use for training",
-    )
-    parser.add_argument(
         "--compile",
         action="store_true",
         help="Use torch.compile for faster training (requires PyTorch 2.0+)",
@@ -392,8 +386,26 @@ def estimate_loss(model, train_loader, eval_loader, eval_iters, device):
     return out
 
 
+def get_device():
+    """Get the best available device for training."""
+    # Check if CUDA is available
+    if torch.cuda.is_available():
+        return "cuda"
+    # Check if MPS is available (Apple Silicon)
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        print("Using Apple Metal Performance Shaders (MPS)")
+        return "mps"
+
+    print("Using CPU (training will be slow)")
+    return "cpu"
+
+
 def train(args):
     """Train the GPT model."""
+
+    # Get best device
+    device = get_device()
+    print(f"Training device: {device}")
 
     # Load tokenizer
     print(f"Loading tokenizer from {args.tokenizer_path}")
@@ -414,11 +426,17 @@ def train(args):
     # Create model
     print("Creating model...")
     model = GPT(config)
-    model.to(args.device)
+    model.to(device)
 
+    # torch.compile not fully supported on MPS yet
     if args.compile:
-        print("Compiling model...")
-        model = torch.compile(model)
+        if device == "mps":
+            print(
+                "Warning: torch.compile not fully supported on MPS, skipping compilation"
+            )
+        else:
+            print("Compiling model...")
+            model = torch.compile(model)
 
     print(model)
 
@@ -445,11 +463,22 @@ def train(args):
         train_dataset, [train_size, eval_size]
     )
 
+    # Reduce num_workers on Mac for stability
+    num_workers = 0 if device == "mps" else 4
+
     train_loader = DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=(device == "cuda"),  # Only pin memory for CUDA
     )
     eval_loader = DataLoader(
-        eval_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4
+        eval_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=(device == "cuda"),
     )
 
     # Create optimizer
@@ -473,12 +502,12 @@ def train(args):
             train_loader_iter = iter(train_loader)
             x, y = next(train_loader_iter)
 
-        x, y = x.to(args.device), y.to(args.device)
+        x, y = x.to(device), y.to(device)
 
         # Evaluate periodically
         if iter_num % args.eval_interval == 0:
             losses = estimate_loss(
-                model, train_loader, eval_loader, args.eval_iters, args.device
+                model, train_loader, eval_loader, args.eval_iters, device
             )
             print(
                 f"Step {iter_num}: train loss {losses['train']:.4f}, eval loss {losses['eval']:.4f}"
@@ -521,8 +550,11 @@ def train(args):
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
 
-        # Log gradients
-        if iter_num % (args.eval_interval // 2) == 0:
+        # Log gradients (reduce frequency on MPS to avoid overhead)
+        gradient_log_interval = (
+            args.eval_interval if device == "mps" else (args.eval_interval // 2)
+        )
+        if iter_num % gradient_log_interval == 0:
             for name, param in model.named_parameters():
                 if param.grad is not None:
                     writer.add_histogram(f"gradients/{name}", param.grad, iter_num)
@@ -556,7 +588,7 @@ def train(args):
     # Generate sample text
     print("\nGenerating sample text...")
     model.eval()
-    context = torch.zeros((1, 1), dtype=torch.long, device=args.device)
+    context = torch.zeros((1, 1), dtype=torch.long, device=device)
     generated = model.generate(context, max_new_tokens=100, temperature=0.8, top_k=200)
     generated_text = tokenizer.decode(generated[0].tolist())
     print(f"Generated: {generated_text}")

@@ -73,12 +73,6 @@ def parse_args():
         help="Save checkpoint interval",
     )
     parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda" if torch.cuda.is_available() else "cpu",
-        help="Device to use for training",
-    )
-    parser.add_argument(
         "--system_prompt",
         type=str,
         default="You are a helpful AI assistant.",
@@ -242,15 +236,33 @@ def evaluate(model, eval_loader, device, max_batches=50):
     return total_loss / num_batches if num_batches > 0 else 0.0
 
 
+def get_device():
+    """Get the best available device for training."""
+    # Check if CUDA is available
+    if torch.cuda.is_available():
+        return "cuda"
+    # Check if MPS is available (Apple Silicon)
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        print("Using Apple Metal Performance Shaders (MPS)")
+        return "mps"
+
+    print("Using CPU (training will be slow)")
+    return "cpu"
+
+
 def train(args):
     """Finetune GPT model for chat."""
+
+    # Get best device
+    device = get_device()
+    print(f"Training device: {device}")
 
     # Load tokenizer
     print(f"Loading tokenizer from {args.tokenizer_path}")
     tokenizer = Tokenizer.from_file(args.tokenizer_path)
 
     # Load pretrained model
-    model, config = load_pretrained_model(args.pretrained_model_path, args.device)
+    model, config = load_pretrained_model(args.pretrained_model_path, device)
 
     # Update block size if needed
     if args.block_size != config.block_size:
@@ -299,20 +311,23 @@ def train(args):
     writer.add_scalar("Dataset/train_size", len(train_dataset), 0)
     writer.add_scalar("Dataset/eval_size", len(eval_dataset), 0)
 
-    # Create dataloaders
+    # Create dataloaders (Mac-friendly settings)
+    num_workers = 0  # Use 0 workers on Mac for stability
+    pin_memory = device == "cuda"  # Only pin memory for CUDA
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=0,
-        pin_memory=True,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
     )
     eval_loader = DataLoader(
         eval_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=0,
-        pin_memory=True,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
     )
 
     # Create optimizer with lower learning rate for finetuning
@@ -343,7 +358,7 @@ def train(args):
             train_loader_iter = iter(train_loader)
             x, y = next(train_loader_iter)
 
-        x, y = x.to(args.device), y.to(args.device)
+        x, y = x.to(device), y.to(device)
 
         # Forward pass
         _, loss = model(x, y)
@@ -382,7 +397,7 @@ def train(args):
 
         # Evaluate periodically
         if iter_num % args.eval_interval == 0:
-            eval_loss = evaluate(model, eval_loader, args.device)
+            eval_loss = evaluate(model, eval_loader, device)
             print(f"\nStep {iter_num}: eval loss {eval_loss:.4f}")
 
             # Log to TensorBoard
@@ -451,7 +466,7 @@ def train(args):
 
     # Test generation
     print("\nTesting chat generation...")
-    test_responses = test_chat(model, tokenizer, args.device, args.system_prompt)
+    test_responses = test_chat(model, tokenizer, device, args.system_prompt)
 
     # Log test responses to TensorBoard
     for i, (prompt, response) in enumerate(test_responses):

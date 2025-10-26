@@ -22,12 +22,6 @@ def parse_args():
         help="Path to trained tokenizer",
     )
     parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda" if torch.cuda.is_available() else "cpu",
-        help="Device to use for inference",
-    )
-    parser.add_argument(
         "--model_type",
         type=str,
         default="chat",
@@ -52,6 +46,20 @@ def parse_args():
         help="Port to run the server on",
     )
     return parser.parse_args()
+
+
+def get_device():
+    """Get the best available device for inference."""
+    # Check if CUDA is available
+    if torch.cuda.is_available():
+        return "cuda"
+    # Check if MPS is available (Apple Silicon)
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        print("Using Apple Metal Performance Shaders (MPS)")
+        return "mps"
+
+    print("Using CPU")
+    return "cpu"
 
 
 class ChatBot:
@@ -282,11 +290,14 @@ def create_ui(chatbot: ChatBot):
 def main():
     args = parse_args()
 
+    # Get best device
+    device = get_device()
+
     # Initialize chatbot
     chatbot = ChatBot(
         model_path=args.model_path,
         tokenizer_path=args.tokenizer_path,
-        device=args.device,
+        device=device,
         model_type=args.model_type,
         system_prompt=args.system_prompt,
     )
