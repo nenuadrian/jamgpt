@@ -6,6 +6,7 @@ import shutil
 
 import pyarrow.parquet as pq
 import pyarrow as pa
+from tqdm import tqdm
 
 
 def parse_args():
@@ -43,6 +44,18 @@ def parse_args():
     parser.add_argument(
         "--seed", type=int, default=42, help="Random seed for shuffling"
     )
+    parser.add_argument(
+        "--max_docs",
+        type=int,
+        default=None,
+        help="Maximum number of documents to download (None for all)",
+    )
+    parser.add_argument(
+        "--max_shards",
+        type=int,
+        default=None,
+        help="Maximum number of shards to create (None for all)",
+    )
     return parser.parse_args()
 
 
@@ -69,10 +82,19 @@ if __name__ == "__main__":
     chars_per_shard = args.chars_per_shard
     row_group_size = args.row_group_size
 
+    print("Loading dataset...")
     ds = load_dataset(**DATASET_KWARGS)
 
+    print("Shuffling dataset...")
     ds = ds.shuffle(seed=args.seed)
     ndocs = len(ds)
+
+    # Limit number of documents if specified
+    if args.max_docs is not None:
+        ndocs = min(ndocs, args.max_docs)
+        ds = ds.select(range(ndocs))
+        print(f"Limited to {ndocs} documents")
+
     print(f"Number of documents: {ndocs}")
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -84,12 +106,33 @@ if __name__ == "__main__":
     time_spent = 0
     time_start = time.time()
 
+    # Create progress bar
+    pbar = tqdm(total=ndocs, desc="Processing documents", unit="docs")
+
     for doc in ds:
+        # Check if we've reached max shards limit
+        if args.max_shards is not None and shard_index >= args.max_shards:
+            print(
+                f"\nReached maximum number of shards ({args.max_shards}), stopping..."
+            )
+            break
+
         shard_docs.append(doc)
         shard_chars += len(doc["text"])
         docs_processed += 1
         docs_multiple_of_row_group = docs_processed % row_group_size == 0
         shard_docs.append(doc["text"])
+
+        # Update progress bar
+        pbar.update(1)
+        pbar.set_postfix(
+            {
+                "shards": shard_index,
+                "chars": f"{shard_chars:,}",
+                "MB": f"{shard_chars / 1_000_000:.1f}",
+            }
+        )
+
         if shard_chars >= chars_per_shard and docs_multiple_of_row_group:
             table = pa.Table.from_pydict({"text": shard_docs})
 
@@ -102,6 +145,7 @@ if __name__ == "__main__":
                 compression_level=3,
                 write_statistics=False,
             )
+
             shard_index += 1
             shard_docs = []
             shard_chars = 0
@@ -110,15 +154,35 @@ if __name__ == "__main__":
             time_spent += time_end - time_start
             time_start = time_end
             remaining_time = time_spent / docs_processed * (ndocs - docs_processed)
-            print(
-                f"Processed {docs_processed}/{ndocs} documents "
-                f"({docs_processed/ndocs*100:.2f}%), "
-                f"time spent: {time_spent:.2f} seconds, "
-                f"estimated remaining time: {remaining_time:.2f} seconds"
-            )
+
+            # Update progress bar with shard completion info
+            pbar.set_description(f"Processing docs (shard {shard_index} saved)")
+
+    pbar.close()
+
+    # Save any remaining documents as final shard
+    if shard_docs and (args.max_shards is None or shard_index < args.max_shards):
+        print(f"\nSaving final shard with {len(shard_docs)} documents...")
+        table = pa.Table.from_pydict({"text": shard_docs})
+        pq.write_table(
+            table,
+            os.path.join(args.output_dir, f"shard_{shard_index:05d}.parquet"),
+            row_group_size=row_group_size,
+            use_dictionary=False,
+            compression="zstd",
+            compression_level=3,
+            write_statistics=False,
+        )
+        shard_index += 1
+
+    print(
+        f"\n✓ Complete: Created {shard_index} shard(s) from {docs_processed:,} documents"
+    )
+    print(f"  Total time: {time_spent:.2f} seconds")
+    print(f"  Average: {time_spent/docs_processed:.3f} sec/doc")
 
     # Clean up default HuggingFace cache if requested
     if os.path.exists(cache_dir):
-        print(f"Cleaning up cache at {cache_dir}")
+        print(f"\nCleaning up cache at {cache_dir}")
         shutil.rmtree(cache_dir)
-        print("Cache cleaned up successfully")
+        print("✓ Cache cleaned up successfully")
