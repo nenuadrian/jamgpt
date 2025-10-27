@@ -188,18 +188,13 @@ if __name__ == "__main__":
     # Skip already processed documents
     if docs_to_skip > 0:
         print(f"Skipping {docs_to_skip:,} documents...", end=" ", flush=True)
-        ds_iter = iter(ds)
-        for _ in range(docs_to_skip):
-            try:
-                next(ds_iter)
-            except StopIteration:
-                print(
-                    "\nWarning: Reached end of dataset while skipping. Starting from beginning."
-                )
-                ds_iter = iter(ds)
-                break
+        if args.streaming:
+            # For streaming datasets, use skip() method which is much more efficient
+            ds = ds.skip(docs_to_skip)
+        else:
+            # For non-streaming datasets, use select to skip
+            ds = ds.select(range(docs_to_skip, len(ds)))
         print("Done!\n")
-        ds = ds_iter
 
     for doc in ds:
         # Check if we've reached max shards limit
