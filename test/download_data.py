@@ -123,9 +123,7 @@ if __name__ == "__main__":
             print(f"Limited to {ndocs} documents")
         print(f"Number of documents: {ndocs}")
     else:
-        print(
-            f"Using streaming mode with {args.num_workers} workers (buffer-based shuffling)"
-        )
+        print(f"Using streaming mode (buffer-based shuffling)")
         # For streaming, shuffle at the buffer level
         ds = ds.shuffle(seed=args.seed, buffer_size=10_000)
         ndocs = args.max_docs if args.max_docs is not None else None
@@ -139,15 +137,11 @@ if __name__ == "__main__":
     time_spent = 0
     time_start = time.time()
 
-    # Thread-safe lock for writing shards
+    # Thread-safe lock for writing shards (not needed in current implementation but kept for safety)
     write_lock = threading.Lock()
 
     # Create progress bar
     pbar = tqdm(total=ndocs, desc="Processing documents", unit="docs")
-
-    # Prefetch documents in parallel for streaming mode
-    if args.streaming:
-        ds = ds.prefetch(args.num_workers)
 
     for doc in ds:
         # Check if we've reached max shards limit
@@ -182,32 +176,29 @@ if __name__ == "__main__":
         )
 
         if shard_chars >= chars_per_shard and docs_multiple_of_row_group:
-            # Write shard with thread safety
-            with write_lock:
-                table = pa.Table.from_pydict({"text": shard_docs})
+            table = pa.Table.from_pydict({"text": shard_docs})
 
-                pq.write_table(
-                    table,
-                    os.path.join(args.output_dir, f"shard_{shard_index:05d}.parquet"),
-                    row_group_size=row_group_size,
-                    use_dictionary=False,
-                    compression="zstd",
-                    compression_level=3,
-                    write_statistics=False,
-                )
+            pq.write_table(
+                table,
+                os.path.join(args.output_dir, f"shard_{shard_index:05d}.parquet"),
+                row_group_size=row_group_size,
+                use_dictionary=False,
+                compression="zstd",
+                compression_level=3,
+                write_statistics=False,
+            )
 
-                shard_index += 1
-                # Clear the list to free memory
-                shard_docs.clear()
-                shard_chars = 0
+            shard_index += 1
+            # Clear the list to free memory
+            shard_docs.clear()
+            shard_chars = 0
 
-                time_end = time.time()
-                time_spent += time_end - time_start
-                time_start = time_end
-                remaining_time = time_spent / docs_processed * (ndocs - docs_processed)
+            time_end = time.time()
+            time_spent += time_end - time_start
+            time_start = time_end
 
-                # Update progress bar with shard completion info
-                pbar.set_description(f"Processing docs (shard {shard_index} saved)")
+            # Update progress bar with shard completion info
+            pbar.set_description(f"Processing docs (shard {shard_index} saved)")
 
     pbar.close()
 
