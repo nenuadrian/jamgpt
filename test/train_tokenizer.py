@@ -5,7 +5,10 @@ from typing import Iterator
 import pyarrow.parquet as pq
 from tokenizers import Tokenizer, models, trainers, pre_tokenizers, decoders, processors
 import json
-import pickle
+from multiprocessing import Pool, cpu_count, get_context
+
+# Set environment variable before any tokenizer operations
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def parse_args():
@@ -51,56 +54,67 @@ def parse_args():
         action="store_true",
         help="Resume training from last checkpoint",
     )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=min(4, cpu_count()),
+        help="Number of parallel workers for reading files",
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=10000,
+        help="Batch size for reading parquet files",
+    )
     return parser.parse_args()
 
 
-def save_checkpoint(
-    output_dir: str, processed_files: list, texts_buffer: list, file_index: int
-):
-    """Save checkpoint with processed files list and current text buffer."""
+def save_checkpoint(output_dir: str, processed_files: list, file_index: int):
+    """Save checkpoint with processed files list only."""
     checkpoint_dir = os.path.join(output_dir, "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     checkpoint = {
         "processed_files": processed_files,
-        "texts_buffer": texts_buffer,
         "file_index": file_index,
     }
 
-    checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pkl")
-    with open(checkpoint_path, "wb") as f:
-        pickle.dump(checkpoint, f)
-
-    # Also save a readable JSON for debugging
-    json_path = os.path.join(checkpoint_dir, "checkpoint_info.json")
-    with open(json_path, "w") as f:
-        json.dump(
-            {
-                "processed_files": processed_files,
-                "file_index": file_index,
-                "num_texts": len(texts_buffer),
-            },
-            f,
-            indent=2,
-        )
-
-    print(f"Checkpoint saved: {len(processed_files)} files processed")
+    checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.json")
+    with open(checkpoint_path, "w") as f:
+        json.dump(checkpoint, f)
 
 
 def load_checkpoint(output_dir: str):
     """Load checkpoint if exists."""
-    checkpoint_path = os.path.join(output_dir, "checkpoints", "checkpoint.pkl")
+    checkpoint_path = os.path.join(output_dir, "checkpoints", "checkpoint.json")
 
     if not os.path.exists(checkpoint_path):
         return None
 
-    with open(checkpoint_path, "rb") as f:
-        checkpoint = pickle.load(f)
+    with open(checkpoint_path, "r") as f:
+        checkpoint = json.load(f)
 
-    print(
-        f"Loaded checkpoint: {len(checkpoint['processed_files'])} files already processed"
-    )
     return checkpoint
+
+
+def process_parquet_file(args_tuple):
+    """Worker function to process a single parquet file and return texts."""
+    file_path, batch_size = args_tuple
+    texts = []
+
+    try:
+        parquet_file = pq.ParquetFile(file_path)
+
+        # Stream batches instead of loading entire file
+        for batch in parquet_file.iter_batches(batch_size=batch_size):
+            batch_texts = batch.column("text").to_pylist()
+
+            # Filter valid texts
+            texts.extend([t for t in batch_texts if t and isinstance(t, str)])
+
+        return file_path, texts, None
+    except Exception as e:
+        return file_path, [], str(e)
 
 
 def text_iterator_from_parquet(
@@ -109,69 +123,66 @@ def text_iterator_from_parquet(
     output_dir: str = None,
     checkpoint_interval: int = 1,
     resume_from_checkpoint: bool = False,
+    num_workers: int = 4,
+    batch_size: int = 10000,
 ) -> Iterator[str]:
-    """Yield text from parquet files one document at a time with checkpointing."""
+    """Yield text from parquet files with parallel processing and streaming."""
     parquet_files = sorted(glob.glob(os.path.join(dataset_path, "*.parquet")))
 
     if max_files is not None:
         parquet_files = parquet_files[:max_files]
 
     # Load checkpoint if resuming
-    processed_files = []
-    texts_buffer = []
-    start_index = 0
+    processed_files_set = set()
 
     if resume_from_checkpoint and output_dir:
         checkpoint = load_checkpoint(output_dir)
         if checkpoint:
-            processed_files = checkpoint["processed_files"]
-            texts_buffer = checkpoint["texts_buffer"]
-            start_index = checkpoint["file_index"]
+            processed_files_set = set(checkpoint["processed_files"])
 
-            # Yield buffered texts first
-            print(f"Resuming from checkpoint with {len(texts_buffer)} buffered texts")
-            for text in texts_buffer:
-                yield text
+    # Filter out already processed files
+    parquet_files = [f for f in parquet_files if f not in processed_files_set]
+    total_files = len(parquet_files)
+    
+    if total_files == 0:
+        return
 
-            # Filter out already processed files
-            parquet_files = [f for f in parquet_files if f not in processed_files]
-            print(f"Skipping {len(processed_files)} already processed files")
+    processed_files = list(processed_files_set)
 
-    print(f"Found {len(parquet_files)} parquet files to process")
+    # Process files in larger chunks for better throughput
+    chunk_size = num_workers * 4
 
-    texts_buffer = []
-    for i, file_path in enumerate(parquet_files, start=start_index):
-        print(
-            f"Processing file {i+1}/{len(parquet_files) + start_index}: {os.path.basename(file_path)}"
-        )
+    for chunk_start in range(0, total_files, chunk_size):
+        chunk_end = min(chunk_start + chunk_size, total_files)
+        chunk = parquet_files[chunk_start:chunk_end]
 
-        try:
-            table = pq.read_table(file_path)
-            texts = table.column("text").to_pylist()
+        # Prepare arguments for parallel processing
+        worker_args = [(file_path, batch_size) for file_path in chunk]
 
-            for text in texts:
-                if text:  # Skip empty texts
-                    texts_buffer.append(text)
+        # Use imap_unordered for streaming results as they complete
+        with get_context("spawn").Pool(processes=num_workers) as pool:
+            for file_path, texts, error in pool.imap_unordered(process_parquet_file, worker_args):
+                if error:
+                    if output_dir:
+                        save_checkpoint(output_dir, processed_files, len(processed_files))
+                    raise RuntimeError(f"Failed to process {file_path}: {error}")
+
+                file_num = len(processed_files) + 1
+                print(f"[{file_num}/{total_files}] {os.path.basename(file_path)}")
+
+                # Yield all texts from this file
+                for text in texts:
                     yield text
 
-            processed_files.append(file_path)
+                processed_files.append(file_path)
 
-            # Save checkpoint periodically
-            if output_dir and (i + 1) % checkpoint_interval == 0:
-                save_checkpoint(output_dir, processed_files, texts_buffer, i + 1)
-
-        except Exception as e:
-            print(f"Error processing {file_path}: {e}")
-            # Save checkpoint on error
-            if output_dir:
-                save_checkpoint(output_dir, processed_files, texts_buffer, i + 1)
-            raise
+                # Save checkpoint periodically
+                if output_dir and file_num % checkpoint_interval == 0:
+                    save_checkpoint(output_dir, processed_files, file_num)
 
     # Save final checkpoint
     if output_dir:
-        save_checkpoint(
-            output_dir, processed_files, texts_buffer, len(parquet_files) + start_index
-        )
+        save_checkpoint(output_dir, processed_files, total_files)
 
 
 def train_bpe_tokenizer(args):
@@ -197,14 +208,11 @@ def train_bpe_tokenizer(args):
         vocab_size=args.vocab_size,
         min_frequency=args.min_frequency,
         special_tokens=special_tokens,
-        show_progress=True,
+        show_progress=False,
     )
 
-    print(f"Training tokenizer with vocab_size={args.vocab_size}")
-    print(f"Reading from: {args.dataset_path}")
-
-    if args.resume_from_checkpoint:
-        print("Resume mode enabled - will skip already processed files")
+    print(f"Training tokenizer (vocab_size={args.vocab_size})")
+    print(f"Dataset: {args.dataset_path}\n")
 
     # Train from iterator
     try:
@@ -215,34 +223,53 @@ def train_bpe_tokenizer(args):
                 output_dir=args.output_dir,
                 checkpoint_interval=args.checkpoint_interval,
                 resume_from_checkpoint=args.resume_from_checkpoint,
+                num_workers=args.num_workers,
+                batch_size=args.batch_size,
             ),
             trainer=trainer,
         )
     except Exception as e:
-        print(f"Error during training: {e}")
-        print(
-            "Progress has been checkpointed. You can resume with --resume_from_checkpoint"
-        )
+        print(f"\nError: {e}")
+        print("Resume with --resume_from_checkpoint")
         raise
 
     # Save tokenizer
     os.makedirs(args.output_dir, exist_ok=True)
     tokenizer.save(os.path.join(args.output_dir, "tokenizer.json"))
 
-    print(f"Tokenizer saved to {args.output_dir}")
+    print(f"\nTokenizer saved to {args.output_dir}")
 
     # Clean up checkpoints after successful training
     checkpoint_dir = os.path.join(args.output_dir, "checkpoints")
     if os.path.exists(checkpoint_dir):
         import shutil
-
         shutil.rmtree(checkpoint_dir)
-        print("Checkpoints cleaned up")
 
     return tokenizer
 
 
 def test_tokenizer(tokenizer):
+    """Quick test of the trained tokenizer."""
+    test_texts = [
+        "Hello, world!",
+        "The quick brown fox jumps over the lazy dog.",
+        "Machine learning is transforming the world.",
+    ]
+
+    print("\nTesting tokenizer:")
+    for text in test_texts:
+        encoding = tokenizer.encode(text)
+        decoded = tokenizer.decode(encoding.ids)
+        print(f"\nOriginal: {text}")
+        print(f"Tokens: {encoding.tokens}")
+        print(f"IDs: {encoding.ids}")
+        print(f"Decoded: {decoded}")
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    tokenizer = train_bpe_tokenizer(args)
+    test_tokenizer(tokenizer)
     """Quick test of the trained tokenizer."""
     test_texts = [
         "Hello, world!",
