@@ -117,11 +117,12 @@ if __name__ == "__main__":
             )
             break
 
-        shard_docs.append(doc)
-        shard_chars += len(doc["text"])
+        # Only append the text, not the full document
+        text = doc["text"]
+        shard_docs.append(text)
+        shard_chars += len(text)
         docs_processed += 1
         docs_multiple_of_row_group = docs_processed % row_group_size == 0
-        shard_docs.append(doc["text"])
 
         # Update progress bar
         pbar.update(1)

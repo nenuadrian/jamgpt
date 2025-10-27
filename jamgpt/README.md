@@ -25,7 +25,7 @@ maturin develop --release --manifest-path rustbpe/Cargo.toml
 
 python -m scripts.tok_train --max_chars=2000000000 --dataset_path /Volumes/StorageT4/data/fineweb-edu-parquet-shards/sample-100BT/ --output_dir model/tokenizer
 
-python -m scripts.tok_train --max_chars=2000000000 --dataset_path ~/scratch/fineweb-edu-parquet-shards/ --output_dir model/tokenizer
+python -m scripts.tok_train --max_chars=2000000000 --dataset_path /mnt/iusers01/fatpou01/compsci01/mbax2an2/scratch/fineweb-edu-parquet-shards/ --output_dir model/tokenizer
 ```
 
 ## Pretrain 
@@ -33,7 +33,7 @@ python -m scripts.tok_train --max_chars=2000000000 --dataset_path ~/scratch/fine
 ```bash 
 python -m scripts.base_train --depth=4 --device_batch_size=1 --checkpoints_path=model/checkpoints --tokenizer_dir=model/tokenizer --dataset_path=/Volumes/StorageT4/data/fineweb-edu-parquet-shards/sample-100BT
 
-python -m scripts.base_train --depth=20 --checkpoints_path=model/checkpoints --tokenizer_dir=model/tokenizer --dataset_path=~/scratch/fineweb-edu-parquet-shards/
+python -m scripts.base_train --depth=20 --checkpoints_path=model/checkpoints --tokenizer_dir=model/tokenizer --dataset_path=/mnt/iusers01/fatpou01/compsci01/mbax2an2/scratch/fineweb-edu-parquet-shards/
 ```
 
 ## Talk to it
