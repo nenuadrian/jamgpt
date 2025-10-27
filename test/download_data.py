@@ -2,6 +2,8 @@ import os
 import time
 import argparse
 import shutil
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
 
 import pyarrow.parquet as pq
@@ -56,6 +58,24 @@ def parse_args():
         default=None,
         help="Maximum number of shards to create (None for all)",
     )
+    parser.add_argument(
+        "--streaming",
+        action="store_true",
+        default=True,
+        help="Use streaming mode to avoid loading entire dataset into memory",
+    )
+    parser.add_argument(
+        "--num_proc",
+        type=int,
+        default=None,
+        help="Number of processes for parallel dataset loading (non-streaming only)",
+    )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=4,
+        help="Number of worker threads for parallel downloads (streaming mode)",
+    )
     return parser.parse_args()
 
 
@@ -77,7 +97,13 @@ if __name__ == "__main__":
         "split": args.dataset_split,
         "name": args.dataset_name,
         "cache_dir": cache_dir,
+        "streaming": args.streaming,
     }
+
+    # Add num_proc for non-streaming mode
+    if not args.streaming and args.num_proc is not None:
+        DATASET_KWARGS["num_proc"] = args.num_proc
+
     print(f"Using cache directory at {cache_dir}")
     chars_per_shard = args.chars_per_shard
     row_group_size = args.row_group_size
@@ -85,17 +111,24 @@ if __name__ == "__main__":
     print("Loading dataset...")
     ds = load_dataset(**DATASET_KWARGS)
 
-    print("Shuffling dataset...")
-    ds = ds.shuffle(seed=args.seed)
-    ndocs = len(ds)
-
-    # Limit number of documents if specified
-    if args.max_docs is not None:
-        ndocs = min(ndocs, args.max_docs)
-        ds = ds.select(range(ndocs))
-        print(f"Limited to {ndocs} documents")
-
-    print(f"Number of documents: {ndocs}")
+    # For streaming datasets, we can't get exact length or shuffle globally
+    # For non-streaming, we can still shuffle if memory allows
+    if not args.streaming:
+        print("Shuffling dataset...")
+        ds = ds.shuffle(seed=args.seed)
+        ndocs = len(ds)
+        if args.max_docs is not None:
+            ndocs = min(ndocs, args.max_docs)
+            ds = ds.select(range(ndocs))
+            print(f"Limited to {ndocs} documents")
+        print(f"Number of documents: {ndocs}")
+    else:
+        print(
+            f"Using streaming mode with {args.num_workers} workers (buffer-based shuffling)"
+        )
+        # For streaming, shuffle at the buffer level
+        ds = ds.shuffle(seed=args.seed, buffer_size=10_000)
+        ndocs = args.max_docs if args.max_docs is not None else None
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -106,14 +139,28 @@ if __name__ == "__main__":
     time_spent = 0
     time_start = time.time()
 
+    # Thread-safe lock for writing shards
+    write_lock = threading.Lock()
+
     # Create progress bar
     pbar = tqdm(total=ndocs, desc="Processing documents", unit="docs")
+
+    # Prefetch documents in parallel for streaming mode
+    if args.streaming:
+        ds = ds.prefetch(args.num_workers)
 
     for doc in ds:
         # Check if we've reached max shards limit
         if args.max_shards is not None and shard_index >= args.max_shards:
             print(
                 f"\nReached maximum number of shards ({args.max_shards}), stopping..."
+            )
+            break
+
+        # Check if we've reached max docs limit (for streaming)
+        if args.max_docs is not None and docs_processed >= args.max_docs:
+            print(
+                f"\nReached maximum number of documents ({args.max_docs}), stopping..."
             )
             break
 
@@ -135,29 +182,32 @@ if __name__ == "__main__":
         )
 
         if shard_chars >= chars_per_shard and docs_multiple_of_row_group:
-            table = pa.Table.from_pydict({"text": shard_docs})
+            # Write shard with thread safety
+            with write_lock:
+                table = pa.Table.from_pydict({"text": shard_docs})
 
-            pq.write_table(
-                table,
-                os.path.join(args.output_dir, f"shard_{shard_index:05d}.parquet"),
-                row_group_size=row_group_size,
-                use_dictionary=False,
-                compression="zstd",
-                compression_level=3,
-                write_statistics=False,
-            )
+                pq.write_table(
+                    table,
+                    os.path.join(args.output_dir, f"shard_{shard_index:05d}.parquet"),
+                    row_group_size=row_group_size,
+                    use_dictionary=False,
+                    compression="zstd",
+                    compression_level=3,
+                    write_statistics=False,
+                )
 
-            shard_index += 1
-            shard_docs = []
-            shard_chars = 0
+                shard_index += 1
+                # Clear the list to free memory
+                shard_docs.clear()
+                shard_chars = 0
 
-            time_end = time.time()
-            time_spent += time_end - time_start
-            time_start = time_end
-            remaining_time = time_spent / docs_processed * (ndocs - docs_processed)
+                time_end = time.time()
+                time_spent += time_end - time_start
+                time_start = time_end
+                remaining_time = time_spent / docs_processed * (ndocs - docs_processed)
 
-            # Update progress bar with shard completion info
-            pbar.set_description(f"Processing docs (shard {shard_index} saved)")
+                # Update progress bar with shard completion info
+                pbar.set_description(f"Processing docs (shard {shard_index} saved)")
 
     pbar.close()
 
