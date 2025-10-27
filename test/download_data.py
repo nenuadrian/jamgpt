@@ -108,6 +108,45 @@ if __name__ == "__main__":
     chars_per_shard = args.chars_per_shard
     row_group_size = args.row_group_size
 
+    # Check for existing shards and calculate resume point
+    os.makedirs(args.output_dir, exist_ok=True)
+    existing_shards = sorted(
+        [
+            f
+            for f in os.listdir(args.output_dir)
+            if f.startswith("shard_") and f.endswith(".parquet")
+        ]
+    )
+
+    docs_to_skip = 0
+    shard_index = 0
+
+    if existing_shards:
+        print(f"\n{'='*60}")
+        print(f"Found {len(existing_shards)} existing shard(s)")
+        print(f"{'='*60}")
+
+        # Count documents in existing shards
+        for shard_file in existing_shards:
+            shard_path = os.path.join(args.output_dir, shard_file)
+            try:
+                table = pq.read_table(shard_path)
+                num_rows = len(table)
+                docs_to_skip += num_rows
+                print(f"  {shard_file}: {num_rows:,} documents")
+            except Exception as e:
+                print(f"  Warning: Could not read {shard_file}: {e}")
+
+        # Extract the next shard index from the last shard file
+        last_shard = existing_shards[-1]
+        shard_index = int(last_shard.split("_")[1].split(".")[0]) + 1
+
+        print(f"\nResuming from shard index {shard_index}")
+        print(f"Skipping {docs_to_skip:,} already processed documents")
+        print(f"{'='*60}\n")
+    else:
+        print("No existing shards found, starting from beginning\n")
+
     print("Loading dataset...")
     ds = load_dataset(**DATASET_KWARGS)
 
@@ -126,12 +165,9 @@ if __name__ == "__main__":
         print(f"Using streaming mode (buffer-based shuffling)")
         # For streaming, shuffle at the buffer level
         ds = ds.shuffle(seed=args.seed, buffer_size=10_000)
-        ndocs = args.max_docs if args.max_docs is not None else None
-
-    os.makedirs(args.output_dir, exist_ok=True)
+        ndocs = args.max_docs
 
     shard_docs = []
-    shard_index = 0
     shard_chars = 0
     docs_processed = 0
     time_spent = 0
@@ -141,7 +177,29 @@ if __name__ == "__main__":
     write_lock = threading.Lock()
 
     # Create progress bar
-    pbar = tqdm(total=ndocs, desc="Processing documents", unit="docs")
+    total_docs = ndocs if ndocs is not None else None
+    pbar = tqdm(
+        total=total_docs,
+        desc="Processing documents",
+        unit="docs",
+        initial=docs_to_skip,
+    )
+
+    # Skip already processed documents
+    if docs_to_skip > 0:
+        print(f"Skipping {docs_to_skip:,} documents...", end=" ", flush=True)
+        ds_iter = iter(ds)
+        for _ in range(docs_to_skip):
+            try:
+                next(ds_iter)
+            except StopIteration:
+                print(
+                    "\nWarning: Reached end of dataset while skipping. Starting from beginning."
+                )
+                ds_iter = iter(ds)
+                break
+        print("Done!\n")
+        ds = ds_iter
 
     for doc in ds:
         # Check if we've reached max shards limit
@@ -152,7 +210,7 @@ if __name__ == "__main__":
             break
 
         # Check if we've reached max docs limit (for streaming)
-        if args.max_docs is not None and docs_processed >= args.max_docs:
+        if args.max_docs is not None and docs_processed + docs_to_skip >= args.max_docs:
             print(
                 f"\nReached maximum number of documents ({args.max_docs}), stopping..."
             )
@@ -217,11 +275,15 @@ if __name__ == "__main__":
         )
         shard_index += 1
 
+    total_docs_processed = docs_to_skip + docs_processed
     print(
-        f"\n✓ Complete: Created {shard_index} shard(s) from {docs_processed:,} documents"
+        f"\n✓ Complete: Created {shard_index} shard(s) total ({len(existing_shards)} existing + {shard_index - len(existing_shards)} new)"
     )
+    print(f"  Total documents processed: {total_docs_processed:,}")
+    print(f"  New documents in this run: {docs_processed:,}")
     print(f"  Total time: {time_spent:.2f} seconds")
-    print(f"  Average: {time_spent/docs_processed:.3f} sec/doc")
+    if docs_processed > 0:
+        print(f"  Average: {time_spent/docs_processed:.3f} sec/doc")
 
     # Clean up default HuggingFace cache if requested
     if os.path.exists(cache_dir):
